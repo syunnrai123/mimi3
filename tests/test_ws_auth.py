@@ -137,6 +137,8 @@ class WebSocketAuthTests(unittest.TestCase):
             code = asyncio.run(get_bridge_code("account:user-1"))
 
         self.assertIn('NODE_ID = "account:user-1"', code)
+        self.assertIn('"x-node-started-at"', code)
+        self.assertIn('"x-node-instance-id"', code)
 
     def test_node_id_is_ignored_when_ws_auth_is_disabled(self):
         ws = FakeWebSocket(headers={"x-node-id": "account:user-1"})
@@ -158,16 +160,24 @@ class WebSocketAuthTests(unittest.TestCase):
             state.active_clients.append(old_ws)
             state.ws_id_to_node_id[id(old_ws)] = "account:user-1"
             state.node_id_to_ws_id["account:user-1"] = id(old_ws)
+            state.ws_id_to_node_started_at[id(old_ws)] = 100.0
+            state.ws_id_to_node_instance_id[id(old_ws)] = "old-instance"
             state.ws_to_req_ids[id(old_ws)] = {req_id}
             state.req_id_to_ws_id[req_id] = id(old_ws)
             state.req_id_timestamps[req_id] = 1.0
             state.pending_queues[req_id] = queue
+            new_ws.headers = {
+                "x-node-started-at": "200.0",
+                "x-node-instance-id": "new-instance",
+            }
 
-            asyncio.run(replace_existing_node_connection("account:user-1", new_ws))
+            self.assertTrue(asyncio.run(replace_existing_node_connection("account:user-1", new_ws)))
 
-            self.assertEqual(len(old_ws.closed_codes), 1)
+            self.assertEqual(old_ws.closed_codes, [web_service.NODE_REPLACED_CLOSE_CODE])
             self.assertNotIn(old_ws, state.active_clients)
             self.assertNotIn(id(old_ws), state.ws_id_to_node_id)
+            self.assertNotIn(id(old_ws), state.ws_id_to_node_started_at)
+            self.assertNotIn(id(old_ws), state.ws_id_to_node_instance_id)
             self.assertNotIn("account:user-1", state.node_id_to_ws_id)
             self.assertNotIn(req_id, state.pending_queues)
             self.assertNotIn(req_id, state.req_id_to_ws_id)
@@ -181,6 +191,41 @@ class WebSocketAuthTests(unittest.TestCase):
             state.req_id_timestamps.clear()
             state.ws_id_to_node_id.clear()
             state.node_id_to_ws_id.clear()
+            state.ws_id_to_node_started_at.clear()
+            state.ws_id_to_node_instance_id.clear()
+            state.client_cooldowns.clear()
+
+    def test_older_same_node_connection_is_rejected(self):
+        old_ws = FakeGatewayWebSocket()
+        new_ws = FakeGatewayWebSocket()
+        new_ws.headers = {
+            "x-node-started-at": "100.0",
+            "x-node-instance-id": "old-duplicate",
+        }
+
+        try:
+            state.active_clients.append(old_ws)
+            state.ws_id_to_node_id[id(old_ws)] = "account:user-1"
+            state.node_id_to_ws_id["account:user-1"] = id(old_ws)
+            state.ws_id_to_node_started_at[id(old_ws)] = 200.0
+            state.ws_id_to_node_instance_id[id(old_ws)] = "current"
+
+            self.assertFalse(asyncio.run(replace_existing_node_connection("account:user-1", new_ws)))
+
+            self.assertIn(old_ws, state.active_clients)
+            self.assertEqual(state.node_id_to_ws_id["account:user-1"], id(old_ws))
+            self.assertEqual(old_ws.closed_codes, [])
+            self.assertEqual(new_ws.closed_codes, [web_service.DUPLICATE_NODE_CLOSE_CODE])
+        finally:
+            state.active_clients.clear()
+            state.pending_queues.clear()
+            state.ws_to_req_ids.clear()
+            state.req_id_to_ws_id.clear()
+            state.req_id_timestamps.clear()
+            state.ws_id_to_node_id.clear()
+            state.node_id_to_ws_id.clear()
+            state.ws_id_to_node_started_at.clear()
+            state.ws_id_to_node_instance_id.clear()
             state.client_cooldowns.clear()
 
     def test_attempt_metrics_use_captured_node_key_after_cleanup(self):
@@ -211,6 +256,8 @@ class WebSocketAuthTests(unittest.TestCase):
             state.req_id_timestamps.clear()
             state.ws_id_to_node_id.clear()
             state.node_id_to_ws_id.clear()
+            state.ws_id_to_node_started_at.clear()
+            state.ws_id_to_node_instance_id.clear()
             state.client_cooldowns.clear()
             state.metrics = state._default_metrics()
 
@@ -230,8 +277,10 @@ class WebSocketAuthTests(unittest.TestCase):
             state.active_clients.append(old_ws)
             state.ws_id_to_node_id[id(old_ws)] = "account:user-1"
             state.node_id_to_ws_id["account:user-1"] = id(old_ws)
+            state.ws_id_to_node_started_at[id(old_ws)] = 100.0
+            new_ws.headers = {"x-node-started-at": "200.0"}
 
-            asyncio.run(replace_existing_node_connection("account:user-1", new_ws))
+            self.assertTrue(asyncio.run(replace_existing_node_connection("account:user-1", new_ws)))
 
             self.assertEqual(close_checks, [{"in_active_clients": False, "node_mapping": None}])
         finally:
@@ -242,6 +291,8 @@ class WebSocketAuthTests(unittest.TestCase):
             state.req_id_timestamps.clear()
             state.ws_id_to_node_id.clear()
             state.node_id_to_ws_id.clear()
+            state.ws_id_to_node_started_at.clear()
+            state.ws_id_to_node_instance_id.clear()
             state.client_cooldowns.clear()
 
 

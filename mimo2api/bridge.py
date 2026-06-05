@@ -1,4 +1,4 @@
-import asyncio, websockets, httpx, json, os
+import asyncio, websockets, httpx, json, os, time, uuid
 
 KEY = os.getenv("MIMO_API_KEY")
 URL = os.getenv("MIMO_API_ENDPOINT")
@@ -6,6 +6,9 @@ BASE = URL.split("/v1/")[0] if "/v1/" in URL else URL
 WS_URL = "__WS_URL__"
 WS_TOKEN = "__WS_TOKEN__"
 NODE_ID = "__NODE_ID__"
+INSTANCE_ID = os.getenv("MIMO_NODE_INSTANCE_ID") or uuid.uuid4().hex
+STARTED_AT = os.getenv("MIMO_NODE_STARTED_AT") or str(time.time())
+TERMINAL_CLOSE_CODES = {4001, 4002}
 
 
 async def connect_gateway():
@@ -14,6 +17,8 @@ async def connect_gateway():
         headers.update({"Authorization": f"Bearer {WS_TOKEN}", "x-ws-token": WS_TOKEN})
     if NODE_ID:
         headers["x-node-id"] = NODE_ID
+    headers["x-node-instance-id"] = INSTANCE_ID
+    headers["x-node-started-at"] = STARTED_AT
 
     if not headers:
         return await websockets.connect(WS_URL, max_size=10**8)
@@ -60,6 +65,8 @@ async def main():
                     async for msg in ws:
                         asyncio.create_task(handle_request(ws, json.loads(msg), client, send_lock))
                 finally:
+                    if getattr(ws, "close_code", None) in TERMINAL_CLOSE_CODES:
+                        return
                     await ws.close()
             except Exception:
                 await asyncio.sleep(3)
