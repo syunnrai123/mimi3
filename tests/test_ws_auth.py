@@ -4,6 +4,7 @@ import os
 import unittest
 from unittest.mock import patch
 
+from mimo2api import web_service
 from mimo2api.auth import verify_ws_tunnel_request
 from mimo2api.gateway_state import state
 from mimo2api.manager import get_bridge_code
@@ -62,6 +63,48 @@ class WebSocketAuthTests(unittest.TestCase):
             self.assertFalse(
                 verify_ws_tunnel_request(FakeWebSocket(headers={"authorization": "Bearer wrong"}))
             )
+
+    def test_unauthorized_ws_rejection_log_is_throttled_by_host(self):
+        old_interval = web_service.UNAUTHORIZED_WS_LOG_INTERVAL
+        old_next_cleanup_at = web_service._unauthorized_ws_next_cleanup_at
+        try:
+            web_service.UNAUTHORIZED_WS_LOG_INTERVAL = 60
+            web_service._unauthorized_ws_next_cleanup_at = 0.0
+            web_service._unauthorized_ws_log_state.clear()
+
+            self.assertEqual(web_service.should_log_unauthorized_ws_rejection("1.2.3.4", now=100.0), (True, 0))
+            self.assertEqual(web_service.should_log_unauthorized_ws_rejection("1.2.3.4", now=101.0), (False, 1))
+            self.assertEqual(web_service.should_log_unauthorized_ws_rejection("1.2.3.4", now=102.0), (False, 2))
+            self.assertEqual(web_service.should_log_unauthorized_ws_rejection("1.2.3.4", now=161.0), (True, 2))
+        finally:
+            web_service.UNAUTHORIZED_WS_LOG_INTERVAL = old_interval
+            web_service._unauthorized_ws_next_cleanup_at = old_next_cleanup_at
+            web_service._unauthorized_ws_log_state.clear()
+
+    def test_unauthorized_ws_rejection_log_state_is_capped(self):
+        old_interval = web_service.UNAUTHORIZED_WS_LOG_INTERVAL
+        old_max_size = web_service.UNAUTHORIZED_WS_LOG_STATE_MAX_SIZE
+        old_next_cleanup_at = web_service._unauthorized_ws_next_cleanup_at
+        try:
+            web_service.UNAUTHORIZED_WS_LOG_INTERVAL = 60
+            web_service.UNAUTHORIZED_WS_LOG_STATE_MAX_SIZE = 2
+            web_service._unauthorized_ws_next_cleanup_at = 0.0
+            web_service._unauthorized_ws_log_state.clear()
+
+            for offset in range(4):
+                self.assertEqual(
+                    web_service.should_log_unauthorized_ws_rejection(f"10.0.0.{offset}", now=100.0 + offset),
+                    (True, 0),
+                )
+
+            self.assertLessEqual(len(web_service._unauthorized_ws_log_state), 2)
+            self.assertIn("10.0.0.2", web_service._unauthorized_ws_log_state)
+            self.assertIn("10.0.0.3", web_service._unauthorized_ws_log_state)
+        finally:
+            web_service.UNAUTHORIZED_WS_LOG_INTERVAL = old_interval
+            web_service.UNAUTHORIZED_WS_LOG_STATE_MAX_SIZE = old_max_size
+            web_service._unauthorized_ws_next_cleanup_at = old_next_cleanup_at
+            web_service._unauthorized_ws_log_state.clear()
 
     def test_bridge_code_injects_ws_token(self):
         ws_url = 'ws://127.0.0.1:8000/ws?source="local"'

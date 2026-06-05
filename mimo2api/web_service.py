@@ -245,10 +245,70 @@ DEFAULT_GATEWAY_ERROR = "Gateway Error: 所有节点请求失败"
 NODE_401_COOLDOWN_SECONDS = int(os.getenv("MIMO_NODE_401_COOLDOWN_SECONDS", "900"))
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROCESS_LOCK_PATH = os.getenv("MIMO_PROCESS_LOCK_PATH", os.path.join(ROOT_DIR, "mimo2api.lock"))
+try:
+    UNAUTHORIZED_WS_LOG_INTERVAL = max(1, int(os.getenv("MIMO_UNAUTHORIZED_WS_LOG_INTERVAL_SECONDS", "60")))
+except ValueError:
+    UNAUTHORIZED_WS_LOG_INTERVAL = 60
+try:
+    UNAUTHORIZED_WS_LOG_STATE_MAX_SIZE = max(
+        100,
+        int(os.getenv("MIMO_UNAUTHORIZED_WS_LOG_STATE_MAX_SIZE", "4096")),
+    )
+except ValueError:
+    UNAUTHORIZED_WS_LOG_STATE_MAX_SIZE = 4096
 
 # 后台 fire-and-forget 任务集合
 _background_tasks: set[asyncio.Task] = set()
 PROCESS_LOCK_SIZE = 1
+_unauthorized_ws_log_state: dict[str, tuple[float, int]] = {}
+_unauthorized_ws_next_cleanup_at = 0.0
+
+
+def prune_unauthorized_ws_log_state(now: float) -> None:
+    """定期清理未授权 WS 日志限流状态，并对高基数来源做容量兜底。"""
+    global _unauthorized_ws_next_cleanup_at
+    if now < _unauthorized_ws_next_cleanup_at and len(_unauthorized_ws_log_state) <= UNAUTHORIZED_WS_LOG_STATE_MAX_SIZE:
+        return
+
+    cutoff = now - UNAUTHORIZED_WS_LOG_INTERVAL * 3
+    for host, (last_logged_at, _) in list(_unauthorized_ws_log_state.items()):
+        if last_logged_at < cutoff:
+            _unauthorized_ws_log_state.pop(host, None)
+
+    overflow = len(_unauthorized_ws_log_state) - UNAUTHORIZED_WS_LOG_STATE_MAX_SIZE
+    if overflow > 0:
+        stale_hosts = sorted(
+            _unauthorized_ws_log_state,
+            key=lambda host: _unauthorized_ws_log_state[host][0],
+        )[:overflow]
+        for host in stale_hosts:
+            _unauthorized_ws_log_state.pop(host, None)
+
+    _unauthorized_ws_next_cleanup_at = now + UNAUTHORIZED_WS_LOG_INTERVAL
+
+
+def should_log_unauthorized_ws_rejection(client_host: str, now: float | None = None) -> tuple[bool, int]:
+    """按来源 IP 限流未授权 WS 日志，返回是否记录以及被抑制的次数。"""
+    now = time.time() if now is None else now
+    client_key = client_host or "Unknown"
+    prune_unauthorized_ws_log_state(now)
+
+    log_record = _unauthorized_ws_log_state.get(client_key)
+    if log_record is None:
+        _unauthorized_ws_log_state[client_key] = (now, 0)
+        if len(_unauthorized_ws_log_state) > UNAUTHORIZED_WS_LOG_STATE_MAX_SIZE:
+            prune_unauthorized_ws_log_state(now)
+        return True, 0
+
+    last_logged_at, suppressed_count = log_record
+    if now - last_logged_at >= UNAUTHORIZED_WS_LOG_INTERVAL:
+        _unauthorized_ws_log_state[client_key] = (now, 0)
+        if len(_unauthorized_ws_log_state) > UNAUTHORIZED_WS_LOG_STATE_MAX_SIZE:
+            prune_unauthorized_ws_log_state(now)
+        return True, suppressed_count
+
+    _unauthorized_ws_log_state[client_key] = (last_logged_at, suppressed_count + 1)
+    return False, suppressed_count + 1
 
 def _track_task(task: asyncio.Task) -> None:
     _background_tasks.add(task)
@@ -471,9 +531,15 @@ async def api_delete_model_mapping(model_name: str):
 
 @app.websocket("/ws")
 async def ws_tunnel(ws: WebSocket):
-    client_addr = f"{ws.client.host}:{ws.client.port}" if ws.client else "Unknown"
+    client_host = ws.client.host if ws.client else "Unknown"
+    client_addr = f"{client_host}:{ws.client.port}" if ws.client else "Unknown"
     if not verify_ws_tunnel_request(ws):
-        logger.warning(f"🚫 拒绝未授权内网节点接入: {client_addr}")
+        should_log, suppressed_count = should_log_unauthorized_ws_rejection(client_host)
+        if should_log:
+            if suppressed_count:
+                logger.warning(f"🚫 拒绝未授权内网节点接入: {client_addr}，此前同源已抑制 {suppressed_count} 次")
+            else:
+                logger.warning(f"🚫 拒绝未授权内网节点接入: {client_addr}")
         await ws.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
