@@ -384,6 +384,66 @@ def apply_model_mapping(body_text: str) -> str:
         return json.dumps(data, ensure_ascii=False)
     return body_text
 
+
+def get_ws_node_id(ws: WebSocket) -> str | None:
+    node_id = ws.headers.get("x-node-id", "").strip()
+    if not node_id:
+        node_id = ws.query_params.get("node_id", "").strip()
+    return node_id or None
+
+
+def get_trusted_ws_node_id(ws: WebSocket) -> str | None:
+    node_id = get_ws_node_id(ws)
+    if node_id and not is_ws_tunnel_auth_enabled():
+        logger.warning("⚠️ WS 鉴权未启用，已忽略客户端上报的 node_id，避免未授权节点替换")
+        return None
+    return node_id
+
+
+def cleanup_client_state(ws: WebSocket, disconnect_body: str = "节点断开连接") -> int:
+    ws_id = id(ws)
+    state.active_clients[:] = [client for client in state.active_clients if client is not ws]
+    state.client_cooldowns.pop(ws_id, None)
+
+    node_id = state.ws_id_to_node_id.pop(ws_id, None)
+    if node_id and state.node_id_to_ws_id.get(node_id) == ws_id:
+        state.node_id_to_ws_id.pop(node_id, None)
+
+    orphan_ids = state.ws_to_req_ids.pop(ws_id, set())
+    for orphan_id in orphan_ids:
+        q = state.pending_queues.pop(orphan_id, None)
+        state.req_id_to_ws_id.pop(orphan_id, None)
+        state.req_id_timestamps.pop(orphan_id, None)
+        if q is not None:
+            try:
+                q.put_nowait({"type": "error", "body": disconnect_body})
+            except asyncio.QueueFull:
+                pass
+
+    if state.current_client_index >= len(state.active_clients):
+        state.current_client_index = 0
+    return len(orphan_ids)
+
+
+async def replace_existing_node_connection(node_id: str, new_ws: WebSocket) -> None:
+    old_ws_id = state.node_id_to_ws_id.get(node_id)
+    if old_ws_id is None:
+        return
+
+    old_ws = next((client for client in state.active_clients if id(client) == old_ws_id), None)
+    if old_ws is None or old_ws is new_ws:
+        state.node_id_to_ws_id.pop(node_id, None)
+        return
+
+    logger.warning(f"♻️ 节点 {node_id} 建立新连接，正在清理旧连接 [{old_ws_id}]")
+    orphan_count = cleanup_client_state(old_ws, "节点连接已被新实例替换")
+    try:
+        await old_ws.close(code=status.WS_1000_NORMAL_CLOSURE)
+    except Exception as exc:
+        logger.debug(f"关闭旧节点连接失败: {exc}")
+    if orphan_count:
+        logger.warning(f"🧹 节点 {node_id} 替换旧连接时清理 {orphan_count} 个孤儿请求队列")
+
 @app.get("/api/model_mapping")
 async def api_get_model_mapping():
     return JSONResponse(content=load_model_mapping())
@@ -418,9 +478,14 @@ async def ws_tunnel(ws: WebSocket):
         return
 
     await ws.accept()
+    node_id = get_trusted_ws_node_id(ws)
+    if node_id:
+        await replace_existing_node_connection(node_id, ws)
+        state.ws_id_to_node_id[id(ws)] = node_id
+        state.node_id_to_ws_id[node_id] = id(ws)
     state.active_clients.append(ws)
     state.client_cooldowns.pop(id(ws), None)
-    logger.info(f"✅ 内网节点已接入: {client_addr}。当前在线节点数: {len(state.active_clients)}")
+    logger.info(f"✅ 内网节点已接入: {node_id or client_addr}。当前在线节点数: {len(state.active_clients)}")
     
     try:
         while True:
@@ -435,26 +500,9 @@ async def ws_tunnel(ws: WebSocket):
     except Exception as e:
         logger.error(f"❌ 内网节点异常断开: {client_addr}, 错误: {e}")
     finally:
-        if ws in state.active_clients:
-            state.active_clients.remove(ws)
-        state.client_cooldowns.pop(id(ws), None)
-        
-        # 清理该节点的所有孤儿队列
-        orphan_ids = state.ws_to_req_ids.pop(id(ws), set())
-        for orphan_id in orphan_ids:
-            q = state.pending_queues.pop(orphan_id, None)
-            state.req_id_to_ws_id.pop(orphan_id, None)
-            state.req_id_timestamps.pop(orphan_id, None)
-            if q is not None:
-                try:
-                    q.put_nowait({"type": "error", "body": "节点断开连接"})
-                except asyncio.QueueFull:
-                    pass
-        if orphan_ids:
-            logger.warning(f"🧹 节点断开，已清理 {len(orphan_ids)} 个孤儿请求队列")
-            
-        if state.current_client_index >= len(state.active_clients):
-            state.current_client_index = 0
+        orphan_count = cleanup_client_state(ws)
+        if orphan_count:
+            logger.warning(f"🧹 节点断开，已清理 {orphan_count} 个孤儿请求队列")
         logger.info(f"当前在线节点数: {len(state.active_clients)}")
 
 
@@ -550,28 +598,28 @@ async def dispatch_to_node(*, method: str, path: str, body: str, log_label: str,
 
     ws_payload = build_ws_payload(req_id, method, path, body)
     attempt_started_at = time.monotonic()
-    record_attempt_started(target_ws)
+    target_node_key = node_label(target_ws)
+    record_attempt_started(target_ws, node_key=target_node_key)
 
     try:
         await target_ws.send_text(ws_payload)
         logger.debug(f"👉 {log_label} [{req_id[:8]}] ({method} {path}) -> 节点: {node_label(target_ws)} (尝试 {attempt_number})")
     except RuntimeError:
-        record_attempt_finished(target_ws=target_ws, status_code=0, first_byte_latency_ms=(time.monotonic() - attempt_started_at) * 1000, success=False)
+        record_attempt_finished(target_ws=target_ws, node_key=target_node_key, status_code=0, first_byte_latency_ms=(time.monotonic() - attempt_started_at) * 1000, success=False)
         logger.warning(f"⚠️ {log_label} 转发失败，节点状态异常，尝试切换...")
         cleanup_pending_request(req_id) # 内部会自动解绑 target_ws
-        if target_ws in state.active_clients:
-            state.active_clients.remove(target_ws)
-        state.client_cooldowns.pop(id(target_ws), None)
+        cleanup_client_state(target_ws)
         return None
 
     try:
         first_msg = await asyncio.wait_for(queue.get(), timeout=NODE_RESPONSE_TIMEOUT)
     except asyncio.TimeoutError:
-        record_attempt_finished(target_ws=target_ws, status_code=504, first_byte_latency_ms=(time.monotonic() - attempt_started_at) * 1000, success=False)
+        record_attempt_finished(target_ws=target_ws, node_key=target_node_key, status_code=504, first_byte_latency_ms=(time.monotonic() - attempt_started_at) * 1000, success=False)
         raise
 
     record_attempt_finished(
         target_ws=target_ws,
+        node_key=target_node_key,
         status_code=int(first_msg.get("status", 200)),
         first_byte_latency_ms=(time.monotonic() - attempt_started_at) * 1000,
         success=first_msg.get("type") != "error" and not should_retry_status(int(first_msg.get("status", 200))),

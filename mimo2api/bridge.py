@@ -5,13 +5,19 @@ URL = os.getenv("MIMO_API_ENDPOINT")
 BASE = URL.split("/v1/")[0] if "/v1/" in URL else URL
 WS_URL = "__WS_URL__"
 WS_TOKEN = "__WS_TOKEN__"
+NODE_ID = "__NODE_ID__"
 
 
 async def connect_gateway():
-    if not WS_TOKEN:
+    headers = {}
+    if WS_TOKEN:
+        headers.update({"Authorization": f"Bearer {WS_TOKEN}", "x-ws-token": WS_TOKEN})
+    if NODE_ID:
+        headers["x-node-id"] = NODE_ID
+
+    if not headers:
         return await websockets.connect(WS_URL, max_size=10**8)
 
-    headers = {"Authorization": f"Bearer {WS_TOKEN}", "x-ws-token": WS_TOKEN}
     try:
         return await websockets.connect(WS_URL, max_size=10**8, additional_headers=headers)
     except TypeError:

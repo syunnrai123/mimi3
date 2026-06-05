@@ -19,6 +19,9 @@ METRICS_SNAPSHOT_INTERVAL = 60  # 每 60 秒保存一次
 
 
 def node_label(ws: WebSocket) -> str:
+    node_id = state.ws_id_to_node_id.get(id(ws))
+    if node_id:
+        return node_id
     return ws.client.host if ws.client else "Unknown"
 
 
@@ -77,10 +80,10 @@ def record_request_started(route_key: str, is_streaming: bool) -> None:
         route_metrics["non_streaming_requests"] += 1
 
 
-def record_attempt_started(target_ws: WebSocket) -> None:
+def record_attempt_started(target_ws: WebSocket, node_key: str | None = None) -> None:
     metrics = state.metrics
     metrics["attempts_total"] += 1
-    _ensure_node_metrics(node_label(target_ws))["attempts_total"] += 1
+    _ensure_node_metrics(node_key or node_label(target_ws))["attempts_total"] += 1
 
 
 def record_attempt_finished(
@@ -89,9 +92,10 @@ def record_attempt_finished(
     status_code: int,
     first_byte_latency_ms: float,
     success: bool,
+    node_key: str | None = None,
 ) -> None:
     metrics = state.metrics
-    node_metrics = _ensure_node_metrics(node_label(target_ws))
+    node_metrics = _ensure_node_metrics(node_key or node_label(target_ws))
 
     if success:
         metrics["attempts_succeeded"] += 1
