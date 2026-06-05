@@ -1,3 +1,4 @@
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -9,18 +10,27 @@ __pycache__/
 .venv/
 venv/
 
-# 运行时与用户数据（勿提交）
+# IDE
+.idea/
+.vscode/
+
+# 运行时与用户数据
+*.db
+*.lock
+*.json.bak
 app_state.json
 claw_users.json
 oc_history.json
+gateway_snapshot.json
 users/*.json
 logs/
 data/
 
-# 抓包归档可能含 Cookie/Token，默认不纳入版本库
+# 抓包归档（可能含 Cookie/Token）
 archive/http_captures/
+
+# 临时文件
 *.sh
 !docker-entrypoint.sh
 .ai_memory/
-.vscodestatus_page/
 status_page/
