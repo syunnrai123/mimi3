@@ -248,9 +248,9 @@ NODE_401_COOLDOWN_SECONDS = int(os.getenv("MIMO_NODE_401_COOLDOWN_SECONDS", "900
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROCESS_LOCK_PATH = os.getenv("MIMO_PROCESS_LOCK_PATH", os.path.join(ROOT_DIR, "mimo2api.lock"))
 try:
-    UNAUTHORIZED_WS_LOG_INTERVAL = max(1, int(os.getenv("MIMO_UNAUTHORIZED_WS_LOG_INTERVAL_SECONDS", "60")))
+    UNAUTHORIZED_WS_LOG_INTERVAL = max(1, int(os.getenv("MIMO_UNAUTHORIZED_WS_LOG_INTERVAL_SECONDS", "10")))
 except ValueError:
-    UNAUTHORIZED_WS_LOG_INTERVAL = 60
+    UNAUTHORIZED_WS_LOG_INTERVAL = 10
 try:
     UNAUTHORIZED_WS_LOG_STATE_MAX_SIZE = max(
         100,
@@ -311,6 +311,7 @@ def should_log_unauthorized_ws_rejection(client_host: str, now: float | None = N
 
     _unauthorized_ws_log_state[client_key] = (last_logged_at, suppressed_count + 1)
     return False, suppressed_count + 1
+
 
 def _track_task(task: asyncio.Task) -> None:
     _background_tasks.add(task)
@@ -579,7 +580,9 @@ async def ws_tunnel(ws: WebSocket):
         should_log, suppressed_count = should_log_unauthorized_ws_rejection(client_host)
         if should_log:
             if suppressed_count:
-                logger.warning(f"🚫 拒绝未授权内网节点接入: {client_addr}，此前同源已抑制 {suppressed_count} 次")
+                logger.warning(
+                    f"🚫 拒绝未授权内网节点接入: {client_addr}，此前同源已抑制 {suppressed_count} 次"
+                )
             else:
                 logger.warning(f"🚫 拒绝未授权内网节点接入: {client_addr}")
         await ws.close(code=status.WS_1008_POLICY_VIOLATION)

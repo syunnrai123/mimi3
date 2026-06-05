@@ -73,6 +73,11 @@ def _env_int(name: str, default: int, minimum: int = 0) -> int:
 
 CLAW_CREATE_WAIT_SECONDS = _env_int("MIMO_CLAW_CREATE_WAIT_SECONDS", 180, 30)
 CLAW_CREATE_FAILED_GRACE_SECONDS = _env_int("MIMO_CLAW_CREATE_FAILED_GRACE_SECONDS", 120, 0)
+CLAW_DESTROY_WAIT_SECONDS = _env_int("MIMO_CLAW_DESTROY_WAIT_SECONDS", 90, 3)
+CLAW_DESTROY_POLL_SECONDS = _env_int("MIMO_CLAW_DESTROY_POLL_SECONDS", 3, 1)
+CLAW_CREATE_RATE_LIMIT_BACKOFF_SECONDS = _env_int("MIMO_CLAW_CREATE_RATE_LIMIT_BACKOFF_SECONDS", 60, 5)
+CLAW_CREATE_FAILURE_BACKOFF_SECONDS = _env_int("MIMO_CLAW_CREATE_FAILURE_BACKOFF_SECONDS", 30, 5)
+CLAW_DESTROY_INCOMPLETE_BACKOFF_SECONDS = _env_int("MIMO_CLAW_DESTROY_INCOMPLETE_BACKOFF_SECONDS", 30, 5)
 
 # ----------------- 用户加载逻辑 (遵循 web_core.py 原版逻辑) -----------------
 def load_all_users() -> dict:
@@ -194,10 +199,12 @@ class NativeClawClient:
         self.events = []
         self.connected = False
         self.session_key = "agent:main:main"
+        self.next_retry_delay = None
         
     async def destroy_claw(self) -> bool:
         """异步请求主机的接口对容器实施销毁"""
         url = f"{BASE_URL}/open-apis/user/mimo-claw/destroy?xiaomichatbot_ph={quote(self.ph)}"
+        status_url = f"{BASE_URL}/open-apis/user/mimo-claw/status"
         c_copy = dict(self.cookies)
         c_copy['xiaomichatbot_ph'] = self.ph
         try:
@@ -208,19 +215,33 @@ class NativeClawClient:
                     self.logger.info(f"销毁请求发送成功: {detail}")
                 else:
                     self.logger.warning(f"销毁请求返回异常: {detail}")
-                # 无论如何等三秒后看看状态
-                await asyncio.sleep(3)
-                status_url = f"{BASE_URL}/open-apis/user/mimo-claw/status"
-                sr = await client.get(status_url, cookies=c_copy, headers=_aistudio_headers(), timeout=30)
-                _, status_detail = _response_details(sr)
-                self.logger.info(f"销毁后终态结果: {status_detail}")
-                return True
+
+                deadline = time.time() + CLAW_DESTROY_WAIT_SECONDS
+                last_status = None
+                last_status_detail = detail
+                while time.time() < deadline:
+                    await asyncio.sleep(CLAW_DESTROY_POLL_SECONDS)
+                    sr = await client.get(status_url, cookies=c_copy, headers=_aistudio_headers(), timeout=30)
+                    data, status_detail = _response_details(sr)
+                    last_status_detail = status_detail
+                    status_value = ""
+                    if isinstance(data, dict):
+                        status_value = (data.get("data") or {}).get("status", "").strip()
+                    if status_value and status_value != last_status:
+                        self.logger.info(f"销毁后状态: {status_detail}")
+                        last_status = status_value
+                    if status_value == "DESTROYED":
+                        self.logger.info(f"销毁后终态结果: {status_detail}")
+                        return True
+                self.logger.warning(f"销毁等待超时，最后状态: {last_status_detail}")
+                return False
         except Exception as e:
             self.logger.error(f"销毁 Claw 异常: {e}")
             return False
 
     async def _create_and_wait(self) -> bool:
         """创建 Claw 实例并等待其可用"""
+        self.next_retry_delay = None
         url_create = f"{BASE_URL}/open-apis/user/mimo-claw/create?xiaomichatbot_ph={quote(self.ph)}"
         url_status = f"{BASE_URL}/open-apis/user/mimo-claw/status"
         url_agree = f"{BASE_URL}/open-apis/agreement/user/mimo-claw?xiaomichatbot_ph={quote(self.ph)}"
@@ -240,15 +261,19 @@ class NativeClawClient:
             create_data, create_detail = _response_details(r)
             if r.status_code == 401:
                 self.logger.error(f"账户已过期失效: {create_detail}")
+                self.next_retry_delay = CLAW_CREATE_RATE_LIMIT_BACKOFF_SECONDS
                 return False
             if r.status_code == 429:
                 self.logger.error(f"当前 Claw 实例负载过高: {create_detail}")
+                self.next_retry_delay = CLAW_CREATE_RATE_LIMIT_BACKOFF_SECONDS
                 return False
             if r.status_code >= 400:
                 self.logger.error(f"创建实例请求失败: {create_detail}")
+                self.next_retry_delay = CLAW_CREATE_FAILURE_BACKOFF_SECONDS
                 return False
             if isinstance(create_data, dict) and create_data.get("code") not in (None, 0):
                 self.logger.error(f"创建实例接口返回异常: {create_detail}")
+                self.next_retry_delay = CLAW_CREATE_FAILURE_BACKOFF_SECONDS
                 return False
             
             # 3. 轮询直到 AVAILABLE。资源紧张时 CREATE_FAILED 可能很快出现，先观察一段时间再判终态。
@@ -287,13 +312,21 @@ class NativeClawClient:
                             continue
                         self.logger.error(f"创建失败，状态进入终态: {status_detail}")
                         self.logger.info("创建失败态需要先清场，尝试销毁失败实例后再进入下一次重试。")
-                        await self.destroy_claw()
+                        destroyed = await self.destroy_claw()
+                        self.next_retry_delay = (
+                            CLAW_CREATE_FAILURE_BACKOFF_SECONDS
+                            if destroyed else CLAW_DESTROY_INCOMPLETE_BACKOFF_SECONDS
+                        )
                         return False
                     failed_status_first_seen_at = None
                     if st in ("DESTROYED", "ERROR"):
                         self.logger.error(f"创建失败，状态进入终态: {status_detail}")
                         self.logger.info("创建失败态需要先清场，尝试销毁失败实例后再进入下一次重试。")
-                        await self.destroy_claw()
+                        destroyed = await self.destroy_claw()
+                        self.next_retry_delay = (
+                            CLAW_CREATE_FAILURE_BACKOFF_SECONDS
+                            if destroyed else CLAW_DESTROY_INCOMPLETE_BACKOFF_SECONDS
+                        )
                         return False
                 except Exception as e:
                     self.logger.warning(f"解析创建状态异常: {e}")
@@ -301,7 +334,13 @@ class NativeClawClient:
         self.logger.error(f"创建实例等待超时，最后状态: {last_status_detail}")
         if last_status and (last_status.endswith("FAILED") or last_status in ("CREATING", "ERROR", "DESTROYED")):
             self.logger.info("创建等待超时后执行销毁清场，避免失败实例影响下一次重试。")
-            await self.destroy_claw()
+            destroyed = await self.destroy_claw()
+            self.next_retry_delay = (
+                CLAW_CREATE_FAILURE_BACKOFF_SECONDS
+                if destroyed else CLAW_DESTROY_INCOMPLETE_BACKOFF_SECONDS
+            )
+        else:
+            self.next_retry_delay = CLAW_CREATE_FAILURE_BACKOFF_SECONDS
         return False
 
     async def _get_ticket(self) -> str:
@@ -482,8 +521,10 @@ class AccountManager:
             if await client.connect(wait_available=create):
                 self.logger.info("已成功通过 websocket 建联!")
                 return True
-            self.logger.warning(f"由于网络或 API 限制连结无响应，{delay}秒后重试...")
-            await asyncio.sleep(delay)
+            retry_delay = client.next_retry_delay or delay
+            client.next_retry_delay = None
+            self.logger.warning(f"由于网络或 API 限制连结无响应，{retry_delay}秒后重试...")
+            await asyncio.sleep(retry_delay)
         self.logger.error("连接 Claw 超过最大重试次数")
         return False
 
@@ -555,7 +596,13 @@ class AccountManager:
                     await self.try_shutdown_instance(client, st)
                     client = NativeClawClient(self.ph, self.cookies, self.logger)
                     self.logger.info("准备强制主动销毁残余不再健康的 Claw 实例...")
-                    await client.destroy_claw()
+                    if not await client.destroy_claw():
+                        self.logger.warning(
+                            f"销毁未进入 DESTROYED，等待 {CLAW_DESTROY_INCOMPLETE_BACKOFF_SECONDS} 秒后重新探测，避免连续 create 撞限。"
+                        )
+                        await client.close()
+                        await interruptible_sleep(CLAW_DESTROY_INCOMPLETE_BACKOFF_SECONDS)
+                        continue
                     await asyncio.sleep(3)
 
                 # 2. 从头 Create 且连入
