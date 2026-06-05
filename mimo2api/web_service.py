@@ -174,6 +174,8 @@ MAX_RETRIES = 3
 MAX_PENDING_QUEUES = 2000
 AI_ROUTE_PREFIXES = ("/v1/", "/anthropic/v1/")
 WEBUI_PUBLIC_PATHS = {"/", "/api/auth/session", "/api/auth/login", "/api/auth/logout", "/api/stats", "/api/status/history", "/webui"}
+NODE_REPLACED_CLOSE_CODE = 4001
+DUPLICATE_NODE_CLOSE_CODE = 4002
 
 if is_ai_auth_enabled():
     logger.info("🔐 AI API 鉴权已启用")
@@ -452,6 +454,24 @@ def get_ws_node_id(ws: WebSocket) -> str | None:
     return node_id or None
 
 
+def get_ws_node_started_at(ws: WebSocket) -> float | None:
+    raw_value = ws.headers.get("x-node-started-at", "").strip()
+    if not raw_value:
+        raw_value = ws.query_params.get("node_started_at", "").strip()
+    try:
+        value = float(raw_value)
+    except (TypeError, ValueError):
+        return None
+    return value if value > 0 else None
+
+
+def get_ws_node_instance_id(ws: WebSocket) -> str | None:
+    instance_id = ws.headers.get("x-node-instance-id", "").strip()
+    if not instance_id:
+        instance_id = ws.query_params.get("node_instance_id", "").strip()
+    return instance_id or None
+
+
 def get_trusted_ws_node_id(ws: WebSocket) -> str | None:
     node_id = get_ws_node_id(ws)
     if node_id and not is_ws_tunnel_auth_enabled():
@@ -468,6 +488,8 @@ def cleanup_client_state(ws: WebSocket, disconnect_body: str = "节点断开连�
     node_id = state.ws_id_to_node_id.pop(ws_id, None)
     if node_id and state.node_id_to_ws_id.get(node_id) == ws_id:
         state.node_id_to_ws_id.pop(node_id, None)
+    state.ws_id_to_node_started_at.pop(ws_id, None)
+    state.ws_id_to_node_instance_id.pop(ws_id, None)
 
     orphan_ids = state.ws_to_req_ids.pop(ws_id, set())
     for orphan_id in orphan_ids:
@@ -485,24 +507,44 @@ def cleanup_client_state(ws: WebSocket, disconnect_body: str = "节点断开连�
     return len(orphan_ids)
 
 
-async def replace_existing_node_connection(node_id: str, new_ws: WebSocket) -> None:
+async def replace_existing_node_connection(node_id: str, new_ws: WebSocket) -> bool:
     old_ws_id = state.node_id_to_ws_id.get(node_id)
     if old_ws_id is None:
-        return
+        return True
 
     old_ws = next((client for client in state.active_clients if id(client) == old_ws_id), None)
     if old_ws is None or old_ws is new_ws:
         state.node_id_to_ws_id.pop(node_id, None)
-        return
+        return True
+
+    old_started_at = state.ws_id_to_node_started_at.get(old_ws_id)
+    new_started_at = get_ws_node_started_at(new_ws)
+    old_instance_id = state.ws_id_to_node_instance_id.get(old_ws_id, "")
+    new_instance_id = get_ws_node_instance_id(new_ws) or ""
+    if old_started_at is not None:
+        should_reject_new = new_started_at is None or new_started_at <= old_started_at
+    else:
+        should_reject_new = new_started_at is None
+    if should_reject_new:
+        logger.debug(
+            f"忽略节点 {node_id} 的旧实例重复连接: old_started_at={old_started_at}, "
+            f"new_started_at={new_started_at}, old_instance={old_instance_id}, new_instance={new_instance_id}"
+        )
+        try:
+            await new_ws.close(code=DUPLICATE_NODE_CLOSE_CODE)
+        except Exception as exc:
+            logger.debug(f"关闭重复节点连接失败: {exc}")
+        return False
 
     logger.warning(f"♻️ 节点 {node_id} 建立新连接，正在清理旧连接 [{old_ws_id}]")
     orphan_count = cleanup_client_state(old_ws, "节点连接已被新实例替换")
     try:
-        await old_ws.close(code=status.WS_1000_NORMAL_CLOSURE)
+        await old_ws.close(code=NODE_REPLACED_CLOSE_CODE)
     except Exception as exc:
         logger.debug(f"关闭旧节点连接失败: {exc}")
     if orphan_count:
         logger.warning(f"🧹 节点 {node_id} 替换旧连接时清理 {orphan_count} 个孤儿请求队列")
+    return True
 
 @app.get("/api/model_mapping")
 async def api_get_model_mapping():
@@ -546,9 +588,16 @@ async def ws_tunnel(ws: WebSocket):
     await ws.accept()
     node_id = get_trusted_ws_node_id(ws)
     if node_id:
-        await replace_existing_node_connection(node_id, ws)
+        if not await replace_existing_node_connection(node_id, ws):
+            return
         state.ws_id_to_node_id[id(ws)] = node_id
         state.node_id_to_ws_id[node_id] = id(ws)
+        node_started_at = get_ws_node_started_at(ws)
+        if node_started_at is not None:
+            state.ws_id_to_node_started_at[id(ws)] = node_started_at
+        node_instance_id = get_ws_node_instance_id(ws)
+        if node_instance_id:
+            state.ws_id_to_node_instance_id[id(ws)] = node_instance_id
     state.active_clients.append(ws)
     state.client_cooldowns.pop(id(ws), None)
     logger.info(f"✅ 内网节点已接入: {node_id or client_addr}。当前在线节点数: {len(state.active_clients)}")
