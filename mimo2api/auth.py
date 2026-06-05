@@ -6,10 +6,11 @@ import os
 import secrets
 import time
 
-from fastapi import Request
+from fastapi import Request, WebSocket
 from fastapi.responses import JSONResponse
 
 AI_AUTH_ENV = "MIMO_RELAY_OPENAI_KEY"
+WS_TUNNEL_KEY_ENV = "MIMO_WS_TUNNEL_KEY"
 WEBUI_USERNAME_ENV = "MIMO_WEBUI_USERNAME"
 WEBUI_PASSWORD_ENV = "MIMO_WEBUI_PASSWORD"
 WEBUI_SECRET_ENV = "MIMO_WEBUI_SECRET"
@@ -26,12 +27,20 @@ def is_ai_auth_enabled() -> bool:
     return bool(_read_env(AI_AUTH_ENV))
 
 
+def is_ws_tunnel_auth_enabled() -> bool:
+    return bool(_read_env(WS_TUNNEL_KEY_ENV))
+
+
 def is_web_auth_enabled() -> bool:
     return bool(_read_env(WEBUI_PASSWORD_ENV))
 
 
 def get_ai_api_key() -> str:
     return _read_env(AI_AUTH_ENV)
+
+
+def get_ws_tunnel_key() -> str:
+    return _read_env(WS_TUNNEL_KEY_ENV)
 
 
 def get_webui_username() -> str:
@@ -87,6 +96,34 @@ def verify_ai_api_key(candidate: str | None) -> bool:
     if not candidate:
         return False
     return secrets.compare_digest(candidate, expected)
+
+
+def extract_ws_tunnel_key(ws: WebSocket) -> str | None:
+    auth_header = ws.headers.get("authorization", "")
+    if auth_header.lower().startswith("bearer "):
+        return auth_header[7:].strip()
+
+    header_value = ws.headers.get("x-ws-token", "").strip()
+    if header_value:
+        return header_value
+
+    query_value = ws.query_params.get("token", "").strip()
+    if query_value:
+        return query_value
+    return None
+
+
+def verify_ws_tunnel_key(candidate: str | None) -> bool:
+    expected = get_ws_tunnel_key()
+    if not expected:
+        return True
+    if not candidate:
+        return False
+    return secrets.compare_digest(candidate, expected)
+
+
+def verify_ws_tunnel_request(ws: WebSocket) -> bool:
+    return verify_ws_tunnel_key(extract_ws_tunnel_key(ws))
 
 
 def require_ai_request(request: Request) -> JSONResponse | None:

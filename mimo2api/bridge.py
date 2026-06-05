@@ -4,6 +4,18 @@ KEY = os.getenv("MIMO_API_KEY")
 URL = os.getenv("MIMO_API_ENDPOINT")
 BASE = URL.split("/v1/")[0] if "/v1/" in URL else URL
 WS_URL = "__WS_URL__"
+WS_TOKEN = "__WS_TOKEN__"
+
+
+async def connect_gateway():
+    if not WS_TOKEN:
+        return await websockets.connect(WS_URL, max_size=10**8)
+
+    headers = {"Authorization": f"Bearer {WS_TOKEN}", "x-ws-token": WS_TOKEN}
+    try:
+        return await websockets.connect(WS_URL, max_size=10**8, additional_headers=headers)
+    except TypeError:
+        return await websockets.connect(WS_URL, max_size=10**8, extra_headers=headers)
 
 async def safe_send(ws, lock, data):
     async with lock:
@@ -36,10 +48,13 @@ async def main():
     async with httpx.AsyncClient(timeout=None) as client:
         while True:
             try:
-                async with websockets.connect(WS_URL, max_size=10**8) as ws:
+                ws = await connect_gateway()
+                try:
                     send_lock = asyncio.Lock()
                     async for msg in ws:
                         asyncio.create_task(handle_request(ws, json.loads(msg), client, send_lock))
+                finally:
+                    await ws.close()
             except Exception:
                 await asyncio.sleep(3)
 

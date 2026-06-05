@@ -51,6 +51,14 @@ MIMO_PROCESS_LOCK_PATH=/app/data/mimo2api.lock
 WS_TUNNEL_URL=ws://your-domain.com:8000/ws
 ```
 
+公网部署建议为节点接入开启 WebSocket 鉴权：
+
+```bash
+MIMO_WS_TUNNEL_KEY=ws-your-random-secret-here
+```
+
+设置后，`/ws` 只接受携带相同密钥的桥接节点连接；不设置时保持兼容模式。生产环境建议通过 `Authorization: Bearer` 或 `x-ws-token` 请求头传递密钥，避免把 token 放入 URL 查询参数。
+
 ## 免责声明
 
 1. **本项目仅供学习交流使用，禁止一切商业/滥用行为。**

@@ -95,8 +95,10 @@ async def get_bridge_code() -> str:
     ws_url = os.environ.get("MIMO2API_WS_URL")
     if not ws_url:
         raise ValueError("MIMO2API_WS_URL环境变量未配置")
-    # 动态把桥接脚本里面原来写死的 WS_URL 给替换掉，并返回修改后的代码块。
-    code = code.replace("__WS_URL__", ws_url)
+    # 动态把桥接脚本里面原来写死的连接参数替换掉，并返回修改后的代码块。
+    ws_token = os.environ.get("MIMO_WS_TUNNEL_KEY", "").strip()
+    code = code.replace('"__WS_URL__"', json.dumps(ws_url))
+    code = code.replace('"__WS_TOKEN__"', json.dumps(ws_token))
     return code
 
 

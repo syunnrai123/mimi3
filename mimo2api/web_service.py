@@ -8,7 +8,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, TextIO
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Response
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Response, status
 from fastapi.responses import StreamingResponse, JSONResponse
 import uvicorn
 import os
@@ -43,9 +43,11 @@ from .audio_helpers import (
 from .auth import (
     get_webui_username,
     is_ai_auth_enabled,
+    is_ws_tunnel_auth_enabled,
     is_web_auth_enabled,
     require_ai_request,
     require_webui_request,
+    verify_ws_tunnel_request,
 )
 from .metrics_store import (
     METRICS_BUCKET_SECONDS,
@@ -175,6 +177,8 @@ WEBUI_PUBLIC_PATHS = {"/", "/api/auth/session", "/api/auth/login", "/api/auth/lo
 
 if is_ai_auth_enabled():
     logger.info("🔐 AI API 鉴权已启用")
+if is_ws_tunnel_auth_enabled():
+    logger.info("🔐 WebSocket 节点接入鉴权已启用")
 if is_web_auth_enabled():
     logger.info(f"🔐 WebUI 鉴权已启用，登录用户: {get_webui_username()}")
 
@@ -407,8 +411,13 @@ async def api_delete_model_mapping(model_name: str):
 
 @app.websocket("/ws")
 async def ws_tunnel(ws: WebSocket):
-    await ws.accept()
     client_addr = f"{ws.client.host}:{ws.client.port}" if ws.client else "Unknown"
+    if not verify_ws_tunnel_request(ws):
+        logger.warning(f"🚫 拒绝未授权内网节点接入: {client_addr}")
+        await ws.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    await ws.accept()
     state.active_clients.append(ws)
     state.client_cooldowns.pop(id(ws), None)
     logger.info(f"✅ 内网节点已接入: {client_addr}。当前在线节点数: {len(state.active_clients)}")
