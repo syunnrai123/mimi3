@@ -337,7 +337,16 @@ async def api_status_history(hours: int = 24):
     return JSONResponse(content=await asyncio.to_thread(load_status_history, hours))
 
 @app.get("/api/errors")
-async def api_errors(limit: int = 50):
+async def api_errors(request: Request, limit: int = 50):
+    if not is_web_auth_enabled():
+        return JSONResponse(
+            {"detail": "查看错误记录需要先配置 MIMO_WEBUI_PASSWORD 以启用 WebUI 鉴权"},
+            status_code=403,
+        )
+    auth_error = require_webui_request(request)
+    if auth_error is not None:
+        return auth_error
+
     limit = max(1, min(limit, 200))
     errors = list(state.recent_errors)[-limit:]
     errors.reverse()  # 最新的在前

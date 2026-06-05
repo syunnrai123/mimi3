@@ -3,43 +3,53 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mimo2 控制面板</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <title>MimoClaw2API</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f766e'/%3E%3Cpath d='M8 22V9h4.2l3.8 7 3.8-7H24v13h-3.2v-7.7l-3.4 6.1h-2.8l-3.4-6.1V22H8z' fill='white'/%3E%3C/svg%3E">
     <style>
         :root {
-            --primary: #4F46E5;
-            --primary-hover: #4338CA;
-            --danger: #EF4444;
-            --danger-hover: #DC2626;
-            --bg-color: #F3F4F6;
-            --card-bg: rgba(255, 255, 255, 0.75);
-            --card-border: rgba(255, 255, 255, 0.4);
-            --text-main: #111827;
-            --text-muted: #6B7280;
-            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-            --radius-md: 12px;
-            --radius-lg: 16px;
+            --bg: #eef0eb;
+            --panel: #fbfcf7;
+            --panel-strong: #ffffff;
+            --line: #d7ddd0;
+            --line-strong: #bec8b6;
+            --ink: #17201a;
+            --muted: #657066;
+            --accent: #0f766e;
+            --accent-soft: #d7f2ec;
+            --blue: #2563eb;
+            --amber: #b45309;
+            --red: #b91c1c;
+            --green: #15803d;
+            --shadow: 0 18px 40px rgba(32, 45, 37, 0.08);
+            --radius: 8px;
+        }
+
+        * {
+            box-sizing: border-box;
         }
 
         body {
             margin: 0;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: linear-gradient(135deg, #e0e7ff 0%, #f3f4f6 100%);
-            color: var(--text-main);
             min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 40px 20px;
-            box-sizing: border-box;
+            color: var(--ink);
+            background:
+                linear-gradient(90deg, rgba(23, 32, 26, 0.04) 1px, transparent 1px) 0 0 / 28px 28px,
+                linear-gradient(0deg, rgba(23, 32, 26, 0.035) 1px, transparent 1px) 0 0 / 28px 28px,
+                radial-gradient(circle at 20% 0%, rgba(15, 118, 110, 0.14), transparent 38%),
+                var(--bg);
+            font-family: "Aptos", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+            letter-spacing: 0;
         }
 
-        .container {
-            width: 100%;
-            max-width: 900px;
-            display: flex;
-            flex-direction: column;
-            gap: 24px;
+        button,
+        input,
+        select,
+        textarea {
+            font: inherit;
+        }
+
+        button {
+            border: 0;
         }
 
         .hidden {
@@ -47,217 +57,470 @@
         }
 
         .auth-shell {
-            width: 100%;
-            max-width: 460px;
+            width: min(440px, calc(100vw - 32px));
+            margin: 12vh auto 0;
         }
 
-        .header {
+        .auth-card,
+        .panel,
+        .modal {
+            background: rgba(251, 252, 247, 0.93);
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+        }
+
+        .auth-card {
+            padding: 28px;
+        }
+
+        .brand-row {
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            margin-bottom: 8px;
             gap: 12px;
         }
 
-        .header h1 {
+        .brand-mark {
+            width: 38px;
+            height: 38px;
+            border-radius: 8px;
+            display: grid;
+            place-items: center;
+            color: white;
+            background: linear-gradient(135deg, #0f766e, #17201a);
+            font-weight: 800;
+        }
+
+        .auth-title,
+        .page-title {
             margin: 0;
-            font-size: 28px;
-            font-weight: 600;
-            color: #1e1b4b;
+            font-size: 26px;
+            line-height: 1.15;
+            font-weight: 760;
+        }
+
+        .auth-copy {
+            margin: 12px 0 22px;
+            color: var(--muted);
+            line-height: 1.7;
+        }
+
+        .shell {
+            width: min(1180px, calc(100vw - 32px));
+            margin: 28px auto;
+            display: grid;
+            gap: 16px;
+        }
+
+        .topbar {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 16px;
+            align-items: center;
         }
 
         .header-meta {
             display: flex;
-            align-items: center;
-            gap: 10px;
-            flex-wrap: wrap;
             justify-content: flex-end;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
         }
 
         .badge {
-            padding: 8px 12px;
+            display: inline-flex;
+            align-items: center;
+            min-height: 30px;
+            padding: 6px 10px;
             border-radius: 999px;
             font-size: 12px;
-            font-weight: 600;
-            background: rgba(255, 255, 255, 0.7);
-            color: #3730A3;
-            border: 1px solid rgba(79, 70, 229, 0.15);
+            font-weight: 700;
+            color: var(--accent);
+            background: var(--accent-soft);
+            border: 1px solid rgba(15, 118, 110, 0.18);
+            white-space: nowrap;
         }
 
         .badge.warn {
-            color: #92400E;
-            border-color: rgba(245, 158, 11, 0.25);
+            color: var(--amber);
+            background: #fff4d6;
+            border-color: rgba(180, 83, 9, 0.2);
         }
 
-        .glass-card {
-            background: var(--card-bg);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid var(--card-border);
-            border-radius: var(--radius-lg);
-            padding: 24px;
-            box-shadow: var(--shadow);
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-
-        .glass-card:hover {
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025);
-        }
-
-        .status-container {
+        .nav {
             display: flex;
+            gap: 6px;
+            padding: 6px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: rgba(255, 255, 255, 0.62);
+            overflow-x: auto;
+        }
+
+        .nav-button,
+        .btn,
+        .icon-btn {
+            min-height: 38px;
+            border-radius: 7px;
+            cursor: pointer;
+            transition: transform 0.16s ease, background 0.16s ease, border-color 0.16s ease;
+        }
+
+        .nav-button {
+            display: inline-flex;
             align-items: center;
-            gap: 16px;
+            gap: 8px;
+            padding: 0 13px;
+            color: var(--muted);
+            background: transparent;
+            white-space: nowrap;
+            font-weight: 700;
         }
 
-        .status-indicator {
-            width: 14px;
-            height: 14px;
-            background: #10B981;
-            border-radius: 50%;
-            box-shadow: 0 0 10px #10B981;
-            animation: pulse 2s infinite;
-        }
-
-        .status-indicator.offline {
-            background: #EF4444;
-            box-shadow: 0 0 10px #EF4444;
-            animation: none;
-        }
-
-        @keyframes pulse {
-            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
-            70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
-            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
-        }
-
-        .status-text {
-            font-size: 18px;
-            font-weight: 500;
-        }
-
-        .status-subtext {
-            color: var(--text-muted);
-            font-size: 14px;
-            margin-top: 4px;
-        }
-
-        .login-title {
-            margin: 0 0 8px 0;
-            font-size: 28px;
-            font-weight: 600;
-            color: #1e1b4b;
-        }
-
-        .login-copy {
-            margin: 0 0 24px 0;
-            color: var(--text-muted);
-            line-height: 1.6;
-        }
-
-        .auth-form {
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
-        }
-
-        .text-input {
-            width: 100%;
-            padding: 12px 14px;
-            border: 1px solid rgba(99, 102, 241, 0.18);
-            border-radius: 12px;
-            background: rgba(255, 255, 255, 0.9);
-            font-size: 14px;
-            box-sizing: border-box;
-            transition: border-color 0.2s ease, box-shadow 0.2s ease;
-        }
-
-        .text-input:focus {
-            outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.08);
-        }
-
-        .flex-between {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 16px;
+        .nav-button.active {
+            color: var(--ink);
+            background: var(--panel-strong);
+            box-shadow: 0 8px 18px rgba(32, 45, 37, 0.07);
         }
 
         .btn {
-            background: var(--primary);
-            color: white;
-            border: none;
-            padding: 10px 18px;
-            border-radius: var(--radius-md);
-            font-size: 14px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s ease;
             display: inline-flex;
             align-items: center;
-            gap: 6px;
+            justify-content: center;
+            gap: 8px;
+            padding: 0 14px;
+            color: white;
+            background: var(--accent);
+            font-weight: 750;
         }
 
-        .btn:hover { background: var(--primary-hover); transform: translateY(-1px); }
-        .btn:active { transform: translateY(0); }
-        
-        .btn-danger { background: white; color: var(--danger); border: 1px solid #fca5a5; }
-        .btn-danger:hover { background: #fef2f2; color: var(--danger-hover); border-color: #f87171; }
+        .btn:hover,
+        .nav-button:hover,
+        .icon-btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .btn-outline {
+            color: var(--ink);
+            background: var(--panel-strong);
+            border: 1px solid var(--line-strong);
+        }
+
+        .btn-danger {
+            color: var(--red);
+            background: #fff5f3;
+            border: 1px solid rgba(185, 28, 28, 0.22);
+        }
+
+        .icon-btn {
+            width: 38px;
+            display: inline-grid;
+            place-items: center;
+            color: var(--ink);
+            background: var(--panel-strong);
+            border: 1px solid var(--line-strong);
+        }
+
+        .panel {
+            padding: 18px;
+        }
+
+        .panel-head,
+        .toolbar,
+        .flex-between {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .section-title {
+            margin: 0;
+            font-size: 17px;
+            line-height: 1.3;
+            font-weight: 780;
+        }
+
+        .muted {
+            color: var(--muted);
+        }
+
+        .status-strip {
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .status-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 99px;
+            background: var(--green);
+            box-shadow: 0 0 0 7px rgba(21, 128, 61, 0.12);
+        }
+
+        .status-dot.offline {
+            background: var(--red);
+            box-shadow: 0 0 0 7px rgba(185, 28, 28, 0.12);
+        }
+
+        .status-main {
+            font-size: 18px;
+            font-weight: 780;
+        }
+
+        .status-sub {
+            margin-top: 3px;
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .kpi {
+            min-height: 104px;
+            padding: 14px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: var(--panel-strong);
+        }
+
+        .kpi-label {
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 750;
+        }
+
+        .kpi-value {
+            margin-top: 12px;
+            font-size: clamp(24px, 4vw, 34px);
+            line-height: 1;
+            font-weight: 820;
+        }
+
+        .kpi-foot {
+            margin-top: 9px;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .grid-two {
+            display: grid;
+            grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
+            gap: 16px;
+        }
 
         .table-wrapper {
+            margin-top: 14px;
             overflow-x: auto;
-            border-radius: 8px;
-            border: 1px solid rgba(0,0,0,0.05);
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: var(--panel-strong);
         }
 
         table {
             width: 100%;
+            min-width: 720px;
             border-collapse: collapse;
             text-align: left;
-            background: rgba(255, 255, 255, 0.5);
         }
 
-        th, td {
-            padding: 14px 16px;
-            border-bottom: 1px solid rgba(0,0,0,0.05);
+        th,
+        td {
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--line);
+            vertical-align: middle;
         }
 
         th {
-            background: rgba(243, 244, 246, 0.5);
-            font-weight: 600;
-            color: var(--text-muted);
-            font-size: 13px;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
+            color: var(--muted);
+            background: #f4f6ef;
+            font-size: 12px;
+            font-weight: 780;
         }
 
         td {
             font-size: 14px;
-            color: #374151;
+        }
+
+        tr:last-child td {
+            border-bottom: 0;
+        }
+
+        .mono,
+        .log-lines {
+            font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+            letter-spacing: 0;
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            min-height: 26px;
+            padding: 4px 9px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 760;
+            border: 1px solid var(--line);
+            background: #f7f8f3;
+            white-space: nowrap;
+        }
+
+        .pill.ok {
+            color: var(--green);
+            background: #e9f8ed;
+            border-color: rgba(21, 128, 61, 0.18);
+        }
+
+        .pill.warn {
+            color: var(--amber);
+            background: #fff4d6;
+            border-color: rgba(180, 83, 9, 0.18);
+        }
+
+        .pill.danger {
+            color: var(--red);
+            background: #fff1f0;
+            border-color: rgba(185, 28, 28, 0.18);
         }
 
         .empty-state {
+            padding: 32px;
             text-align: center;
-            padding: 40px;
-            color: var(--text-muted);
-            font-size: 14px;
+            color: var(--muted);
         }
 
-        /* Modal Styles */
+        .form-label {
+            display: block;
+            margin-bottom: 7px;
+            color: var(--muted);
+            font-size: 13px;
+            font-weight: 750;
+        }
+
+        .text-input,
+        .select,
+        .form-control {
+            width: 100%;
+            border: 1px solid var(--line-strong);
+            border-radius: 7px;
+            background: var(--panel-strong);
+            color: var(--ink);
+            outline: none;
+        }
+
+        .text-input,
+        .select {
+            min-height: 38px;
+            padding: 0 11px;
+        }
+
+        .form-control {
+            min-height: 118px;
+            padding: 12px;
+            resize: vertical;
+        }
+
+        .text-input:focus,
+        .select:focus,
+        .form-control:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.12);
+        }
+
+        .auth-form {
+            display: grid;
+            gap: 14px;
+        }
+
+        .field-row {
+            display: flex;
+            align-items: end;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .field-row > * {
+            min-width: 150px;
+        }
+
+        .checkbox-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 38px;
+            color: var(--muted);
+            font-size: 13px;
+            font-weight: 720;
+        }
+
+        .log-shell {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(280px, 0.45fr);
+            gap: 16px;
+        }
+
+        .log-lines {
+            margin: 14px 0 0;
+            height: 560px;
+            overflow: auto;
+            padding: 14px;
+            color: #d8ede4;
+            background: #101814;
+            border-radius: var(--radius);
+            border: 1px solid #223028;
+            font-size: 12px;
+            line-height: 1.65;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+
+        .error-list {
+            display: grid;
+            gap: 10px;
+            margin-top: 14px;
+            max-height: 560px;
+            overflow: auto;
+        }
+
+        .error-item {
+            padding: 12px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: var(--panel-strong);
+        }
+
+        .error-meta {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .error-reason {
+            margin-top: 8px;
+            overflow-wrap: anywhere;
+        }
+
         .modal-overlay {
             position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.3);
-            backdrop-filter: blur(4px);
+            inset: 0;
+            z-index: 1000;
             display: flex;
             align-items: center;
             justify-content: center;
+            padding: 18px;
+            background: rgba(23, 32, 26, 0.36);
             opacity: 0;
             visibility: hidden;
-            transition: all 0.3s ease;
-            z-index: 1000;
+            transition: opacity 0.2s ease, visibility 0.2s ease;
         }
 
         .modal-overlay.active {
@@ -266,176 +529,330 @@
         }
 
         .modal {
-            background: white;
-            width: 100%;
-            max-width: 480px;
-            border-radius: var(--radius-lg);
-            padding: 24px;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-            transform: scale(0.95) translateY(10px);
-            transition: all 0.3s ease;
+            width: min(520px, 100%);
+            padding: 22px;
+            transform: translateY(10px);
+            transition: transform 0.2s ease;
         }
 
         .modal-overlay.active .modal {
-            transform: scale(1) translateY(0);
+            transform: translateY(0);
         }
 
-        .modal-title { margin: 0 0 16px 0; font-size: 20px; font-weight: 600; }
-        .form-group { margin-bottom: 16px; }
-        .form-label { display: block; font-size: 14px; font-weight: 500; margin-bottom: 6px; color: #374151; }
-        .form-control {
-            width: 100%;
-            padding: 12px;
-            border: 1px solid #D1D5DB;
-            border-radius: 8px;
-            font-family: monospace;
-            font-size: 13px;
-            box-sizing: border-box;
-            transition: border-color 0.2s;
-            resize: vertical;
-            min-height: 100px;
-        }
-        .form-control:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1); }
-        .form-hint { font-size: 12px; color: var(--text-muted); margin-top: 6px; line-height: 1.4;}
-        
         .modal-actions {
             display: flex;
             justify-content: flex-end;
-            gap: 12px;
-            margin-top: 24px;
+            gap: 10px;
+            margin-top: 18px;
         }
-
-        .btn-outline { background: transparent; border: 1px solid #D1D5DB; color: #4B5563; }
-        .btn-outline:hover { background: #F3F4F6; }
 
         .toast {
             position: fixed;
-            bottom: 20px;
             right: 20px;
-            background: white;
-            border-left: 4px solid var(--primary);
-            padding: 12px 20px;
-            border-radius: 8px;
-            box-shadow: var(--shadow);
-            transform: translateX(120%);
-            transition: transform 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            bottom: 20px;
             z-index: 2000;
-            font-size: 14px;
-            font-weight: 500;
+            max-width: min(420px, calc(100vw - 40px));
+            padding: 12px 14px;
+            border-radius: var(--radius);
+            color: var(--ink);
+            background: var(--panel-strong);
+            border: 1px solid var(--line-strong);
+            box-shadow: var(--shadow);
+            transform: translateY(16px);
+            opacity: 0;
+            pointer-events: none;
+            transition: transform 0.2s ease, opacity 0.2s ease;
+            font-weight: 720;
         }
-        .toast.show { transform: translateX(0); }
-        .toast.error { border-left-color: var(--danger); color: var(--danger); }
-        .toast.success { border-left-color: #10B981; color: #047857; }
 
-        @media (max-width: 720px) {
-            body {
-                padding: 24px 14px;
-            }
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
 
-            .header {
-                align-items: flex-start;
-                flex-direction: column;
+        .toast.error {
+            color: var(--red);
+        }
+
+        .toast.success {
+            color: var(--green);
+        }
+
+        @media (max-width: 920px) {
+            .topbar,
+            .grid-two,
+            .log-shell {
+                grid-template-columns: 1fr;
             }
 
             .header-meta {
                 justify-content: flex-start;
             }
 
-            .glass-card,
-            .modal {
-                padding: 18px;
-            }
-
-            th, td {
-                padding: 12px;
+            .kpi-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
             }
         }
 
+        @media (max-width: 560px) {
+            .shell {
+                width: min(100% - 20px, 1180px);
+                margin-top: 14px;
+            }
+
+            .panel,
+            .auth-card,
+            .modal {
+                padding: 14px;
+            }
+
+            .topbar {
+                gap: 12px;
+            }
+
+            .auth-title,
+            .page-title {
+                font-size: 22px;
+            }
+
+            .kpi-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .status-strip {
+                grid-template-columns: auto 1fr;
+            }
+
+            .status-strip .btn {
+                grid-column: 1 / -1;
+            }
+
+            .log-lines {
+                height: 420px;
+            }
+        }
     </style>
 </head>
 <body>
     <div id="authShell" class="auth-shell hidden">
-        <div class="glass-card">
-            <h1 class="login-title">Mimo2 Center</h1>
-            <p class="login-copy">这个面板现在需要登录后才能查看和管理节点账号。</p>
-            <div class="auth-form">
+        <div class="auth-card">
+            <div class="brand-row">
+                <div class="brand-mark">M</div>
+                <h1 class="auth-title">MimoClaw2API</h1>
+            </div>
+            <p class="auth-copy">登录后查看网关、通信节点、日志和 Claw 凭证。</p>
+            <form id="loginForm" class="auth-form">
                 <div>
                     <label class="form-label" for="loginUsername">用户名</label>
-                    <input id="loginUsername" class="text-input" autocomplete="username" />
+                    <input id="loginUsername" class="text-input" autocomplete="username">
                 </div>
                 <div>
                     <label class="form-label" for="loginPassword">密码</label>
-                    <input id="loginPassword" class="text-input" type="password" autocomplete="current-password" />
+                    <input id="loginPassword" class="text-input" type="password" autocomplete="current-password">
                 </div>
-                <button class="btn" onclick="submitLogin()">登录</button>
-            </div>
+                <button id="loginBtn" class="btn" type="submit">登录</button>
+            </form>
         </div>
     </div>
 
-    <div id="appShell" class="container hidden">
-        <div class="header">
-            <h1>Mimo2 Center</h1>
+    <div id="appShell" class="shell hidden">
+        <header class="topbar">
+            <div class="brand-row">
+                <div class="brand-mark">M</div>
+                <div>
+                    <h1 class="page-title">MimoClaw2API</h1>
+                    <div class="muted" id="pageSubtitle">网关概览</div>
+                </div>
+            </div>
             <div class="header-meta">
                 <span id="webAuthBadge" class="badge">WebUI 未鉴权</span>
                 <span id="aiAuthBadge" class="badge warn">AI 端点未鉴权</span>
-                <button id="logoutBtn" class="btn btn-outline hidden" onclick="logout()">退出登录</button>
+                <button id="logoutBtn" class="btn btn-outline hidden" type="button">退出登录</button>
             </div>
-        </div>
+        </header>
 
-        <!-- 状态卡片 -->
-        <div class="glass-card">
-            <div>
-                <div class="status-container">
-                    <div id="statusIndicator" class="status-indicator"></div>
-                    <div>
-                        <div class="status-text">网关运行中</div>
-                        <div class="status-subtext" id="statusText">正在获取实时数据...</div>
+        <nav class="nav" aria-label="主导航">
+            <button class="nav-button active" type="button" data-view="overview">概览</button>
+            <button class="nav-button" type="button" data-view="nodes">内网节点</button>
+            <button class="nav-button" type="button" data-view="logs">日志</button>
+            <button class="nav-button" type="button" data-view="credentials">凭证</button>
+        </nav>
+
+        <section class="panel">
+            <div class="status-strip">
+                <div id="statusIndicator" class="status-dot"></div>
+                <div>
+                    <div id="statusTitle" class="status-main">网关运行中</div>
+                    <div id="statusText" class="status-sub">正在获取实时数据...</div>
+                </div>
+                <button id="refreshBtn" class="btn btn-outline" type="button">刷新</button>
+            </div>
+        </section>
+
+        <main>
+            <section id="view-overview" class="view">
+                <div class="kpi-grid">
+                    <div class="kpi">
+                        <div class="kpi-label">在线节点</div>
+                        <div id="kpiClients" class="kpi-value">0</div>
+                        <div id="kpiClientsFoot" class="kpi-foot">可用 0 / 冷却 0</div>
+                    </div>
+                    <div class="kpi">
+                        <div class="kpi-label">请求总量</div>
+                        <div id="kpiRequests" class="kpi-value">0</div>
+                        <div id="kpiRequestsFoot" class="kpi-foot">成功率 0%</div>
+                    </div>
+                    <div class="kpi">
+                        <div class="kpi-label">平均延迟</div>
+                        <div id="kpiLatency" class="kpi-value">0ms</div>
+                        <div id="kpiLatencyFoot" class="kpi-foot">P95 0ms</div>
+                    </div>
+                    <div class="kpi">
+                        <div class="kpi-label">Token 总量</div>
+                        <div id="kpiTokens" class="kpi-value">0</div>
+                        <div id="kpiTokensFoot" class="kpi-foot">有 usage 的请求 0</div>
                     </div>
                 </div>
-            </div>
-        </div>
 
-        <!-- 用户管理卡片 -->
-        <div class="glass-card">
-            <div class="flex-between">
-                <h2 style="margin: 0; font-size: 18px;">Claw 运行账号管理</h2>
-                <button class="btn" onclick="openModal()">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                    导入凭证
-                </button>
-            </div>
-            
-            <div class="table-wrapper">
-                <table id="usersTable">
-                    <thead>
-                        <tr>
-                            <th>用户 ID (User ID)</th>
-                            <th>备注名</th>
-                            <th>实例状态 / 剩余时长</th>
-                            <th>ServiceToken 简览</th>
-                            <th>操作</th>
-                        </tr>
-                    </thead>
-                    <tbody id="usersBody">
-                        <tr><td colspan="5" class="empty-state">加载中...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+                <div class="grid-two" style="margin-top: 16px;">
+                    <section class="panel">
+                        <div class="panel-head">
+                            <h2 class="section-title">接口路由</h2>
+                            <span id="routeCount" class="pill">0 条</span>
+                        </div>
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>路由</th>
+                                        <th>请求</th>
+                                        <th>成功率</th>
+                                        <th>平均延迟</th>
+                                        <th>状态码</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="routesBody">
+                                    <tr><td colspan="5" class="empty-state">暂无路由数据</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <section class="panel">
+                        <div class="panel-head">
+                            <h2 class="section-title">运行状态</h2>
+                            <span id="uptimeBadge" class="pill">0 秒</span>
+                        </div>
+                        <div class="table-wrapper">
+                            <table style="min-width: 360px;">
+                                <tbody id="runtimeBody">
+                                    <tr><td class="empty-state">暂无运行数据</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+            </section>
+
+            <section id="view-nodes" class="view hidden">
+                <section class="panel">
+                    <div class="panel-head">
+                        <h2 class="section-title">通信内网节点</h2>
+                        <span id="nodeSummary" class="pill">0 个在线</span>
+                    </div>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>节点地址</th>
+                                    <th>状态</th>
+                                    <th>挂起请求</th>
+                                    <th>尝试 / 成功率</th>
+                                    <th>首字节延迟</th>
+                                    <th>状态码</th>
+                                </tr>
+                            </thead>
+                            <tbody id="nodesBody">
+                                <tr><td colspan="7" class="empty-state">暂无内网节点连接</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </section>
+
+            <section id="view-logs" class="view hidden">
+                <div class="log-shell">
+                    <section class="panel">
+                        <div class="toolbar">
+                            <h2 class="section-title">文件日志</h2>
+                            <div class="field-row">
+                                <select id="logFileSelect" class="select" aria-label="日志文件"></select>
+                                <select id="logLimitSelect" class="select" aria-label="日志行数">
+                                    <option value="100">100 行</option>
+                                    <option value="300" selected>300 行</option>
+                                    <option value="600">600 行</option>
+                                    <option value="1000">1000 行</option>
+                                </select>
+                                <label class="checkbox-label">
+                                    <input id="logAutoRefresh" type="checkbox" checked>
+                                    自动刷新
+                                </label>
+                                <button id="copyLogsBtn" class="icon-btn" type="button" title="复制日志" aria-label="复制日志">⧉</button>
+                            </div>
+                        </div>
+                        <pre id="logLines" class="log-lines">正在加载日志...</pre>
+                    </section>
+
+                    <section class="panel">
+                        <div class="panel-head">
+                            <h2 class="section-title">近期错误</h2>
+                            <button id="refreshErrorsBtn" class="btn btn-outline" type="button">刷新</button>
+                        </div>
+                        <div id="errorList" class="error-list">
+                            <div class="empty-state">暂无错误记录</div>
+                        </div>
+                    </section>
+                </div>
+            </section>
+
+            <section id="view-credentials" class="view hidden">
+                <section class="panel">
+                    <div class="flex-between">
+                        <h2 class="section-title">Claw 运行账号</h2>
+                        <button id="openImportBtn" class="btn" type="button">导入凭证</button>
+                    </div>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>用户 ID</th>
+                                    <th>备注名</th>
+                                    <th>实例状态 / 剩余时长</th>
+                                    <th>ServiceToken</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usersBody">
+                                <tr><td colspan="5" class="empty-state">加载中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </section>
+        </main>
     </div>
 
-    <!-- 导入弹窗 -->
     <div class="modal-overlay" id="importModal">
         <div class="modal">
-            <h3 class="modal-title">导入 Xiaomi 凭证</h3>
-            <div class="form-group">
-                <label class="form-label">Cookie / 凭证数据字符串</label>
-                <textarea id="cookieInput" class="form-control" placeholder='例如: serviceToken="vjQ..."; userId=686621...; xiaomichatbot_ph="6vv..."'></textarea>
-                <div class="form-hint">支持自动解析多格式文本，需至少包含 <code>userId</code>, <code>serviceToken</code> 及 <code>xiaomichatbot_ph</code>。系统会自动提取值。</div>
+            <h3 class="section-title">导入 Xiaomi 凭证</h3>
+            <div style="margin-top: 16px;">
+                <label class="form-label" for="cookieInput">Cookie / 凭证数据字符串</label>
+                <textarea id="cookieInput" class="form-control mono" placeholder='例如: serviceToken="vjQ..."; userId=686621...; xiaomichatbot_ph="6vv..."'></textarea>
             </div>
             <div class="modal-actions">
-                <button class="btn btn-outline" onclick="closeModal()">取消</button>
-                <button class="btn" onclick="submitImport()">确认导入</button>
+                <button id="closeImportBtn" class="btn btn-outline" type="button">取消</button>
+                <button id="submitImportBtn" class="btn" type="button">确认导入</button>
             </div>
         </div>
     </div>
@@ -443,165 +860,125 @@
     <div id="toast" class="toast"></div>
 
     <script>
-        let statusInterval;
-        let webAuthEnabled = false;
-        let webAuthReady = false;
-        let preferredUsername = 'admin';
+        const stateStore = {
+            statusInterval: null,
+            webAuthEnabled: false,
+            webAuthReady: false,
+            preferredUsername: 'admin',
+            currentView: 'overview',
+            lastStats: null,
+            loading: {
+                status: false,
+                stats: false,
+                users: false,
+                logs: false,
+                errors: false
+            }
+        };
 
-        function showToast(msg, type='success') {
-            const el = document.getElementById('toast');
+        const pageTitles = {
+            overview: '网关概览',
+            nodes: '内网节点',
+            logs: '日志查看',
+            credentials: '凭证管理'
+        };
+
+        const $ = (id) => document.getElementById(id);
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#39;');
+        }
+
+        function showToast(msg, type = 'success') {
+            const el = $('toast');
             el.textContent = msg;
             el.className = `toast show ${type}`;
-            setTimeout(() => { el.className = `toast ${type}`; }, 3000);
+            clearTimeout(el._timer);
+            el._timer = setTimeout(() => { el.className = `toast ${type}`; }, 3000);
         }
 
         function setShellVisibility(showApp) {
-            document.getElementById('appShell').classList.toggle('hidden', !showApp);
-            document.getElementById('authShell').classList.toggle('hidden', showApp);
+            $('appShell').classList.toggle('hidden', !showApp);
+            $('authShell').classList.toggle('hidden', showApp);
         }
 
-        function applyAuthBadges(session) {
-            const webBadge = document.getElementById('webAuthBadge');
-            const aiBadge = document.getElementById('aiAuthBadge');
-            const logoutBtn = document.getElementById('logoutBtn');
-
-            webBadge.textContent = session.enabled ? `WebUI 已鉴权 · ${session.username}` : 'WebUI 未鉴权';
-            webBadge.className = `badge${session.enabled ? '' : ' warn'}`;
-            aiBadge.textContent = session.ai_auth_enabled ? 'AI 端点已鉴权' : 'AI 端点未鉴权';
-            aiBadge.className = `badge${session.ai_auth_enabled ? '' : ' warn'}`;
-            logoutBtn.classList.toggle('hidden', !session.enabled);
+        function formatNumber(value) {
+            const num = Number(value || 0);
+            if (num >= 1000000) return `${(num / 1000000).toFixed(1)}m`;
+            if (num >= 10000) return `${(num / 1000).toFixed(1)}k`;
+            return String(num);
         }
 
-        async function fetchSession() {
-            const res = await fetch('/api/auth/session', { credentials: 'same-origin' });
-            if (!res.ok) {
-                throw new Error('获取登录状态失败');
-            }
-            const session = await res.json();
-            webAuthEnabled = !!session.enabled;
-            preferredUsername = session.username || 'admin';
-            document.getElementById('loginUsername').value = preferredUsername;
-            applyAuthBadges(session);
-            return session;
+        function formatMs(value) {
+            const num = Number(value || 0);
+            if (num >= 1000) return `${(num / 1000).toFixed(1)}s`;
+            return `${Math.round(num)}ms`;
+        }
+
+        function formatDuration(seconds) {
+            let remain = Math.max(0, Number(seconds || 0));
+            const days = Math.floor(remain / 86400);
+            remain %= 86400;
+            const hours = Math.floor(remain / 3600);
+            remain %= 3600;
+            const minutes = Math.floor(remain / 60);
+            const secs = Math.floor(remain % 60);
+            if (days) return `${days}天 ${hours}小时`;
+            if (hours) return `${hours}小时 ${minutes}分钟`;
+            if (minutes) return `${minutes}分钟 ${secs}秒`;
+            return `${secs}秒`;
+        }
+
+        function statusCodePills(statusCodes) {
+            const entries = Object.entries(statusCodes || {});
+            if (!entries.length) return '<span class="muted">-</span>';
+            return entries.map(([code, count]) => {
+                const num = Number(code);
+                const tone = num >= 500 ? 'danger' : num >= 400 ? 'warn' : 'ok';
+                return `<span class="pill ${tone}">${escapeHtml(code)} · ${escapeHtml(count)}</span>`;
+            }).join(' ');
         }
 
         async function apiFetch(url, options = {}) {
-            const opts = { credentials: 'same-origin', ...options };
-            const res = await fetch(url, opts);
+            const res = await fetch(url, { credentials: 'same-origin', ...options });
             if (res.status === 401) {
-                const wasAuthenticated = webAuthReady;
-                webAuthReady = false;
+                const wasAuthenticated = stateStore.webAuthReady;
+                stateStore.webAuthReady = false;
                 setShellVisibility(false);
-                // 仅在会话过期（之前已登录）时清空密码，未登录状态下不干扰用户输入
-                if (wasAuthenticated) {
-                    document.getElementById('loginPassword').value = '';
-                }
+                if (wasAuthenticated) $('loginPassword').value = '';
                 showToast('登录已失效，请重新登录', 'error');
                 throw new Error('UNAUTHORIZED');
             }
             return res;
         }
 
-        function startStatusPolling() {
-            if (statusInterval) {
-                clearInterval(statusInterval);
-            }
-            statusInterval = setInterval(() => {
-                if (webAuthReady || !webAuthEnabled) {
-                    fetchStatus();
-                }
-            }, 3000);
+        function applyAuthBadges(session) {
+            $('webAuthBadge').textContent = session.enabled ? `WebUI 已鉴权 · ${session.username}` : 'WebUI 未鉴权';
+            $('webAuthBadge').className = `badge${session.enabled ? '' : ' warn'}`;
+            $('aiAuthBadge').textContent = session.ai_auth_enabled ? 'AI 端点已鉴权' : 'AI 端点未鉴权';
+            $('aiAuthBadge').className = `badge${session.ai_auth_enabled ? '' : ' warn'}`;
+            $('logoutBtn').classList.toggle('hidden', !session.enabled);
         }
 
-        async function fetchStatus() {
-            // 认证开启但未登录时，跳过状态请求（避免 401 清空密码输入框）
-            if (webAuthEnabled && !webAuthReady) return;
-            try {
-                const res = await apiFetch('/api/system/status');
-                const data = await res.json();
-                const indicator = document.getElementById('statusIndicator');
-                const text = document.getElementById('statusText');
-                
-                if (data.active_clients > 0) {
-                    indicator.className = 'status-indicator';
-                    text.textContent = `内网通信节点保持连接: ${data.active_clients} 个`;
-                } else {
-                    indicator.className = 'status-indicator offline';
-                    text.textContent = `危险！没有任何一个内网节点在线，所有 API 请求将被退回`;
-                }
-            } catch(e) {
-                if (e.message === 'UNAUTHORIZED') {
-                    return;
-                }
-                document.getElementById('statusIndicator').className = 'status-indicator offline';
-                document.getElementById('statusText').textContent = '后端连接失败';
-            }
-        }
-
-        async function fetchUsers() {
-            try {
-                const res = await apiFetch('/api/users/list');
-                const data = await res.json();
-                const tbody = document.getElementById('usersBody');
-                
-                if (data.users && data.users.length > 0) {
-                    tbody.innerHTML = data.users.map(u => `
-                        <tr>
-                            <td><strong style="color:var(--primary)">${u.userId}</strong></td>
-                            <td>${u.name || '(未命名)'}</td>
-                            <td>
-                                <div><strong style="color: ${u.claw_status === 'AVAILABLE' ? '#10B981' : (u.claw_status === 'EXPIRED(401)' ? '#EF4444' : '#F59E0B')}">${u.claw_status || '未知'}</strong></div>
-                                <div class="countdown-text" data-remain="${u.remain_sec}" style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
-                                    ${u.remain_sec > 0 ? '剩余: ' + Math.floor(u.remain_sec / 60) + ' 分 ' + (u.remain_sec % 60) + ' 秒' : '已过期/无环境'}
-                                </div>
-                            </td>
-                            <td>
-                                <span style="display:inline-block; max-width: 120px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color: var(--text-muted);">
-                                    ${u.serviceToken ? u.serviceToken.substring(0,10)+'...' : '无效'}
-                                </span>
-                            </td>
-                            <td>
-                                <button class="btn btn-danger" onclick="deleteUser('${u.userId}')">删除</button>
-                            </td>
-                        </tr>
-                    `).join('');
-                } else {
-                    tbody.innerHTML = '<tr><td colspan="5" class="empty-state">当前未加载任何凭证</td></tr>';
-                }
-            } catch(e) {
-                if (e.message !== 'UNAUTHORIZED') {
-                    console.error("加载用户列表失败", e);
-                }
-            }
-        }
-
-        async function deleteUser(uid) {
-            if(!confirm(`确定要移除账号 ${uid} 吗？\n删除后下一次轮换将不再拉起该账号的请求。`)) return;
-            try {
-                const res = await apiFetch(`/api/users/delete/${uid}`, {method: 'DELETE'});
-                if(res.ok) {
-                    showToast('删除成功');
-                    fetchUsers();
-                } else {
-                    showToast('删除失败: '+ (await res.text()), 'error');
-                }
-            } catch(e) {
-                showToast('网络请求异常', 'error');
-            }
-        }
-
-        function openModal() {
-            document.getElementById('cookieInput').value = '';
-            document.getElementById('importModal').classList.add('active');
-        }
-
-        function closeModal() {
-            document.getElementById('importModal').classList.remove('active');
+        async function fetchSession() {
+            const res = await fetch('/api/auth/session', { credentials: 'same-origin' });
+            if (!res.ok) throw new Error('获取登录状态失败');
+            const session = await res.json();
+            stateStore.webAuthEnabled = !!session.enabled;
+            stateStore.preferredUsername = session.username || 'admin';
+            $('loginUsername').value = stateStore.preferredUsername;
+            applyAuthBadges(session);
+            return session;
         }
 
         async function submitLogin() {
-            const username = document.getElementById('loginUsername').value.trim() || preferredUsername;
-            const password = document.getElementById('loginPassword').value;
+            const username = $('loginUsername').value.trim() || stateStore.preferredUsername;
+            const password = $('loginPassword').value;
             if (!password) {
                 showToast('密码不能为空', 'error');
                 return;
@@ -610,7 +987,7 @@
             try {
                 const res = await fetch('/api/auth/login', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: { 'Content-Type': 'application/json' },
                     credentials: 'same-origin',
                     body: JSON.stringify({ username, password })
                 });
@@ -619,8 +996,8 @@
                     showToast(data.detail || '登录失败', 'error');
                     return;
                 }
-                webAuthReady = true;
-                document.getElementById('loginPassword').value = '';
+                stateStore.webAuthReady = true;
+                $('loginPassword').value = '';
                 setShellVisibility(true);
                 showToast('登录成功');
                 await initializeDashboard();
@@ -631,58 +1008,345 @@
 
         async function logout() {
             try {
-                await fetch('/api/auth/logout', {
-                    method: 'POST',
-                    credentials: 'same-origin'
-                });
+                await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
             } finally {
-                webAuthReady = false;
+                stateStore.webAuthReady = false;
                 setShellVisibility(false);
-                document.getElementById('loginPassword').value = '';
+                $('loginPassword').value = '';
             }
         }
 
-        async function submitImport() {
-            const val = document.getElementById('cookieInput').value;
-            if(!val.trim()) {
-                showToast('输入不能为空', 'error'); return;
+        function setView(viewName) {
+            const view = pageTitles[viewName] ? viewName : 'overview';
+            stateStore.currentView = view;
+            $('pageSubtitle').textContent = pageTitles[view];
+            document.querySelectorAll('.view').forEach((el) => el.classList.add('hidden'));
+            $(`view-${view}`).classList.remove('hidden');
+            document.querySelectorAll('.nav-button').forEach((btn) => {
+                btn.classList.toggle('active', btn.dataset.view === view);
+            });
+            if (location.hash !== `#${view}`) {
+                history.replaceState(null, '', `#${view}`);
             }
+            refreshCurrentView();
+        }
 
+        async function fetchStatus() {
+            if (stateStore.webAuthEnabled && !stateStore.webAuthReady) return;
+            if (stateStore.loading.status) return;
+            stateStore.loading.status = true;
+            try {
+                const res = await apiFetch('/api/system/status');
+                const data = await res.json();
+                const online = Number(data.active_clients || 0);
+                $('statusIndicator').className = `status-dot${online > 0 ? '' : ' offline'}`;
+                $('statusTitle').textContent = online > 0 ? '网关运行中' : '无可用内网节点';
+                $('statusText').textContent = online > 0
+                    ? `内网通信节点保持连接: ${online} 个`
+                    : '没有任何内网节点在线，API 请求会被退回';
+            } catch (e) {
+                if (e.message === 'UNAUTHORIZED') return;
+                $('statusIndicator').className = 'status-dot offline';
+                $('statusTitle').textContent = '后端连接失败';
+                $('statusText').textContent = '请检查服务进程是否仍在运行';
+            } finally {
+                stateStore.loading.status = false;
+            }
+        }
+
+        async function fetchStats() {
+            if (stateStore.loading.stats) return;
+            stateStore.loading.stats = true;
+            try {
+                const res = await apiFetch('/api/stats');
+                if (!res.ok) throw new Error(await res.text());
+                stateStore.lastStats = await res.json();
+                renderStats(stateStore.lastStats);
+            } catch (e) {
+                if (e.message !== 'UNAUTHORIZED') console.error('加载统计失败', e);
+            } finally {
+                stateStore.loading.stats = false;
+            }
+        }
+
+        function renderStats(stats) {
+            $('kpiClients').textContent = formatNumber(stats.active_clients);
+            $('kpiClientsFoot').textContent = `可用 ${stats.available_clients || 0} / 冷却 ${stats.cooldown_clients || 0}`;
+            $('kpiRequests').textContent = formatNumber(stats.requests?.total);
+            $('kpiRequestsFoot').textContent = `成功率 ${stats.requests?.success_rate || 0}%`;
+            $('kpiLatency').textContent = formatMs(stats.latency?.avg_ms);
+            $('kpiLatencyFoot').textContent = `P95 ${formatMs(stats.latency?.p95_ms)}`;
+            $('kpiTokens').textContent = formatNumber(stats.tokens?.total_tokens);
+            $('kpiTokensFoot').textContent = `有 usage 的请求 ${formatNumber(stats.tokens?.requests_with_usage)}`;
+            $('uptimeBadge').textContent = formatDuration(stats.uptime_seconds);
+
+            renderRuntime(stats);
+            renderRoutes(stats.routes || {});
+            renderNodes(stats);
+        }
+
+        function renderRuntime(stats) {
+            const rows = [
+                ['Pending 请求', stats.pending_requests],
+                ['后台任务', stats.background_tasks],
+                ['当前轮询索引', stats.current_client_index],
+                ['流式请求', stats.streaming_requests],
+                ['非流式请求', stats.non_streaming_requests],
+                ['尝试成功率', `${stats.attempts?.success_rate || 0}%`]
+            ];
+            $('runtimeBody').innerHTML = rows.map(([label, value]) => `
+                <tr>
+                    <td class="muted">${escapeHtml(label)}</td>
+                    <td class="mono" style="text-align: right;">${escapeHtml(value)}</td>
+                </tr>
+            `).join('');
+        }
+
+        function renderRoutes(routes) {
+            const entries = Object.entries(routes);
+            $('routeCount').textContent = `${entries.length} 条`;
+            if (!entries.length) {
+                $('routesBody').innerHTML = '<tr><td colspan="5" class="empty-state">暂无路由数据</td></tr>';
+                return;
+            }
+            $('routesBody').innerHTML = entries.map(([route, item]) => `
+                <tr>
+                    <td class="mono">${escapeHtml(route)}</td>
+                    <td>${escapeHtml(item.requests?.total || 0)}</td>
+                    <td><span class="pill ${Number(item.requests?.success_rate || 0) >= 95 ? 'ok' : 'warn'}">${escapeHtml(item.requests?.success_rate || 0)}%</span></td>
+                    <td>${formatMs(item.avg_latency_ms)}</td>
+                    <td>${statusCodePills(item.status_codes)}</td>
+                </tr>
+            `).join('');
+        }
+
+        function renderNodes(stats) {
+            const nodes = stats.nodes || [];
+            $('nodeSummary').textContent = `${stats.active_clients || 0} 个在线 · ${stats.available_clients || 0} 个可用`;
+            if (!nodes.length) {
+                $('nodesBody').innerHTML = '<tr><td colspan="7" class="empty-state">暂无内网节点连接</td></tr>';
+                return;
+            }
+            $('nodesBody').innerHTML = nodes.map((node) => {
+                const statusText = node.available ? '可用' : `冷却 ${node.cooldown_remaining_seconds || 0}s`;
+                const statusTone = node.available ? 'ok' : 'warn';
+                return `
+                    <tr>
+                        <td>${escapeHtml(Number(node.index || 0) + 1)}</td>
+                        <td>
+                            <div class="mono">${escapeHtml(node.node)}</div>
+                            <div class="muted mono">client ${escapeHtml(node.client_id)}</div>
+                        </td>
+                        <td><span class="pill ${statusTone}">${escapeHtml(statusText)}</span></td>
+                        <td>${escapeHtml(node.pending_requests || 0)}</td>
+                        <td>${escapeHtml(node.attempts?.total || 0)} / ${escapeHtml(node.attempts?.success_rate || 0)}%</td>
+                        <td>${formatMs(node.avg_first_byte_latency_ms)}</td>
+                        <td>${statusCodePills(node.status_codes)}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        async function fetchUsers() {
+            if (stateStore.loading.users) return;
+            stateStore.loading.users = true;
+            try {
+                const res = await apiFetch('/api/users/list');
+                const data = await res.json();
+                const users = data.users || [];
+                if (!users.length) {
+                    $('usersBody').innerHTML = '<tr><td colspan="5" class="empty-state">当前未加载任何凭证</td></tr>';
+                    return;
+                }
+                $('usersBody').innerHTML = users.map((user) => {
+                    const status = user.claw_status || 'UNKNOWN';
+                    const tone = status === 'AVAILABLE' ? 'ok' : status === 'EXPIRED(401)' ? 'danger' : 'warn';
+                    return `
+                        <tr>
+                            <td class="mono">${escapeHtml(user.userId)}</td>
+                            <td>${escapeHtml(user.name || '(未命名)')}</td>
+                            <td>
+                                <span class="pill ${tone}">${escapeHtml(status)}</span>
+                                <div class="countdown-text muted" data-remain="${escapeHtml(user.remain_sec || 0)}" style="margin-top: 6px;">
+                                    ${Number(user.remain_sec) > 0 ? `剩余: ${formatDuration(user.remain_sec)}` : '已过期/无环境'}
+                                </div>
+                            </td>
+                            <td class="mono muted">${escapeHtml(user.serviceToken ? `${user.serviceToken.substring(0, 10)}...` : '无效')}</td>
+                            <td><button class="btn btn-danger" type="button" data-delete-user="${escapeHtml(user.userId)}">删除</button></td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (e) {
+                if (e.message !== 'UNAUTHORIZED') console.error('加载用户列表失败', e);
+            } finally {
+                stateStore.loading.users = false;
+            }
+        }
+
+        async function deleteUser(uid) {
+            if (!confirm(`确定要移除账号 ${uid} 吗？\n删除后下一次轮换将不再拉起该账号的请求。`)) return;
+            try {
+                const res = await apiFetch(`/api/users/delete/${encodeURIComponent(uid)}`, { method: 'DELETE' });
+                if (res.ok) {
+                    showToast('删除成功');
+                    fetchUsers();
+                } else {
+                    showToast(`删除失败: ${await res.text()}`, 'error');
+                }
+            } catch (e) {
+                if (e.message !== 'UNAUTHORIZED') showToast('网络请求异常', 'error');
+            }
+        }
+
+        function openModal() {
+            $('cookieInput').value = '';
+            $('importModal').classList.add('active');
+        }
+
+        function closeModal() {
+            $('importModal').classList.remove('active');
+        }
+
+        async function submitImport() {
+            const value = $('cookieInput').value;
+            if (!value.trim()) {
+                showToast('输入不能为空', 'error');
+                return;
+            }
             try {
                 const res = await apiFetch('/api/users/add', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ raw_text: val })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ raw_text: value })
                 });
-                
                 const data = await res.json();
-                if(res.ok) {
+                if (res.ok) {
                     showToast(`成功提取并存入 userId: ${data.userId}`);
                     closeModal();
                     fetchUsers();
                 } else {
                     showToast(data.detail || '解析缺少必要字段', 'error');
                 }
-            } catch(e) {
-                if (e.message !== 'UNAUTHORIZED') {
-                    showToast('提交异常', 'error');
+            } catch (e) {
+                if (e.message !== 'UNAUTHORIZED') showToast('提交异常', 'error');
+            }
+        }
+
+        async function fetchLogs() {
+            if (stateStore.loading.logs) return;
+            stateStore.loading.logs = true;
+            try {
+                const file = $('logFileSelect').value || 'gateway.log';
+                const limit = $('logLimitSelect').value || '300';
+                const res = await apiFetch(`/api/logs?file=${encodeURIComponent(file)}&limit=${encodeURIComponent(limit)}`);
+                const data = await res.json();
+                if (!res.ok) {
+                    $('logLines').textContent = data.detail || '日志加载失败';
+                    if (res.status === 403) {
+                        $('logAutoRefresh').checked = false;
+                    }
+                    return;
                 }
+                renderLogFileOptions(data.files || [], data.file || file);
+                const prefix = data.truncated ? '[只显示日志文件尾部]\n' : '';
+                $('logLines').textContent = `${prefix}${(data.lines || []).join('\n')}` || '暂无日志内容';
+            } catch (e) {
+                if (e.message !== 'UNAUTHORIZED') $('logLines').textContent = '日志加载失败';
+            } finally {
+                stateStore.loading.logs = false;
+            }
+        }
+
+        function renderLogFileOptions(files, selected) {
+            const current = $('logFileSelect').value;
+            const finalSelected = selected || current || 'gateway.log';
+            const options = files.length ? files : [finalSelected];
+            $('logFileSelect').innerHTML = options.map((file) => (
+                `<option value="${escapeHtml(file)}" ${file === finalSelected ? 'selected' : ''}>${escapeHtml(file)}</option>`
+            )).join('');
+        }
+
+        async function fetchErrors() {
+            if (stateStore.loading.errors) return;
+            stateStore.loading.errors = true;
+            try {
+                const res = await apiFetch('/api/errors?limit=30');
+                const data = await res.json();
+                if (!res.ok) {
+                    $('errorList').innerHTML = `<div class="empty-state">${escapeHtml(data.detail || '错误记录加载失败')}</div>`;
+                    return;
+                }
+                const errors = data.errors || [];
+                if (!errors.length) {
+                    $('errorList').innerHTML = '<div class="empty-state">暂无错误记录</div>';
+                    return;
+                }
+                $('errorList').innerHTML = errors.map((err) => `
+                    <div class="error-item">
+                        <div class="error-meta">
+                            <span>${escapeHtml(new Date((err.ts || 0) * 1000).toLocaleString())}</span>
+                            <span class="pill ${Number(err.status) >= 500 ? 'danger' : 'warn'}">${escapeHtml(err.status)}</span>
+                        </div>
+                        <div class="error-reason">${escapeHtml(err.reason || '-')}</div>
+                        <div class="muted mono" style="margin-top: 8px;">${escapeHtml(err.route || '')} ${escapeHtml(err.model || '')}</div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                if (e.message !== 'UNAUTHORIZED') {
+                    $('errorList').innerHTML = '<div class="empty-state">错误记录加载失败</div>';
+                    console.error('加载错误记录失败', e);
+                }
+            } finally {
+                stateStore.loading.errors = false;
+            }
+        }
+
+        async function refreshCurrentView() {
+            if (stateStore.webAuthEnabled && !stateStore.webAuthReady) return;
+            await fetchStatus();
+            if (stateStore.currentView === 'overview' || stateStore.currentView === 'nodes') {
+                await fetchStats();
+            } else if (stateStore.currentView === 'credentials') {
+                await fetchUsers();
+            } else if (stateStore.currentView === 'logs') {
+                await Promise.all([fetchLogs(), fetchErrors()]);
+            }
+        }
+
+        function startPolling() {
+            if (stateStore.statusInterval) clearInterval(stateStore.statusInterval);
+            stateStore.statusInterval = setInterval(() => {
+                if (stateStore.webAuthEnabled && !stateStore.webAuthReady) return;
+                fetchStatus();
+                if (stateStore.currentView === 'overview' || stateStore.currentView === 'nodes') fetchStats();
+                if (stateStore.currentView === 'logs' && $('logAutoRefresh').checked) fetchLogs();
+            }, 3000);
+        }
+
+        async function copyLogs() {
+            try {
+                await navigator.clipboard.writeText($('logLines').textContent || '');
+                showToast('日志已复制');
+            } catch (e) {
+                showToast('复制失败', 'error');
             }
         }
 
         async function initializeDashboard() {
-            await Promise.all([fetchStatus(), fetchUsers()]);
-            startStatusPolling();
+            const initialView = (location.hash || '#overview').slice(1);
+            setView(initialView);
+            startPolling();
         }
 
         async function bootstrap() {
+            bindEvents();
             try {
                 const session = await fetchSession();
                 if (session.enabled && !session.authenticated) {
                     setShellVisibility(false);
-                    return;   // 认证未通过，不启动轮询，不触发 fetchStatus
+                    return;
                 }
-                webAuthReady = true;
+                stateStore.webAuthReady = true;
                 setShellVisibility(true);
                 await initializeDashboard();
             } catch (e) {
@@ -690,23 +1354,51 @@
                 showToast('初始化失败，请刷新重试', 'error');
             }
         }
-        
-        // 本地纯前端倒计时（不消耗任何网络请求）
+
+        function bindEvents() {
+            $('loginForm').addEventListener('submit', (event) => {
+                event.preventDefault();
+                submitLogin();
+            });
+            $('logoutBtn').addEventListener('click', logout);
+            $('refreshBtn').addEventListener('click', refreshCurrentView);
+            $('openImportBtn').addEventListener('click', openModal);
+            $('closeImportBtn').addEventListener('click', closeModal);
+            $('submitImportBtn').addEventListener('click', submitImport);
+            $('copyLogsBtn').addEventListener('click', copyLogs);
+            $('refreshErrorsBtn').addEventListener('click', fetchErrors);
+            $('logFileSelect').addEventListener('change', fetchLogs);
+            $('logLimitSelect').addEventListener('change', fetchLogs);
+            $('importModal').addEventListener('click', (event) => {
+                if (event.target.id === 'importModal') closeModal();
+            });
+            document.querySelector('.nav').addEventListener('click', (event) => {
+                const btn = event.target.closest('[data-view]');
+                if (btn) setView(btn.dataset.view);
+            });
+            $('usersBody').addEventListener('click', (event) => {
+                const btn = event.target.closest('[data-delete-user]');
+                if (btn) deleteUser(btn.dataset.deleteUser);
+            });
+            window.addEventListener('hashchange', () => {
+                setView((location.hash || '#overview').slice(1));
+            });
+        }
+
         setInterval(() => {
-            document.querySelectorAll('.countdown-text').forEach(el => {
-                let remain = parseInt(el.getAttribute('data-remain'));
+            document.querySelectorAll('.countdown-text').forEach((el) => {
+                let remain = Number(el.getAttribute('data-remain') || 0);
                 if (remain > 0) {
-                    remain--;
+                    remain -= 1;
                     el.setAttribute('data-remain', remain);
-                    el.textContent = '剩余: ' + Math.floor(remain / 60) + ' 分 ' + (remain % 60) + ' 秒';
+                    el.textContent = `剩余: ${formatDuration(remain)}`;
                 } else if (remain === 0 && el.textContent.includes('剩余')) {
-                    el.textContent = '即将或已过期...';
+                    el.textContent = '即将或已过期';
                 }
             });
         }, 1000);
 
         window.addEventListener('DOMContentLoaded', bootstrap);
-
     </script>
 </body>
 </html>
