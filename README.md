@@ -5,6 +5,7 @@
 ## 功能
 
 - OpenAI 兼容 API 中转（支持 `/v1/chat/completions`, `/v1/responses`, `/anthropic/v1/messages`）
+- 语音合成（TTS）：兼容 OpenAI `/v1/audio/speech`，适配 MiMo-V2.5-TTS 系列
 - Web 控制面板（实时监控、日志查看）
 - 多账号轮询负载均衡
 - 流式响应支持
@@ -58,6 +59,134 @@ MIMO_WS_TUNNEL_KEY=ws-your-random-secret-here
 ```
 
 设置后，`/ws` 只接受携带相同密钥的桥接节点连接；不设置时保持兼容模式。生产环境建议通过 `Authorization: Bearer` 或 `x-ws-token` 请求头传递密钥，避免把 token 放入 URL 查询参数。
+
+## 语音合成（TTS）调用示例
+
+网关已适配 MiMo-V2.5-TTS 系列模型，提供两种调用方式。
+
+> **鉴权**：若在 `.env` 中设置了 `MIMO_RELAY_OPENAI_KEY`，则 `/v1/*`、`/anthropic/v1/*` 的所有请求都需携带该密钥（请求头 `Authorization: Bearer <key>`，或 `x-api-key` / `api-key`）；未设置时为兼容模式，可省略鉴权头。
+
+### 方式一：`/v1/audio/speech`（OpenAI 兼容，推荐）
+
+直接传入目标文本即可，网关会自动满足 MiMo「目标文本须置于 assistant 角色」的要求。
+
+```bash
+curl -X POST http://localhost:8000/v1/audio/speech \
+  -H "Authorization: Bearer $MIMO_RELAY_OPENAI_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "mimo-v2.5-tts",
+    "input": "你好，这是一段语音合成测试。",
+    "voice": "mimo_default",
+    "response_format": "wav",
+    "instructions": "用温柔、平静的语气朗读"
+  }' --output speech.wav
+```
+
+```python
+import os
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:8000/v1",
+    api_key=os.getenv("MIMO_RELAY_OPENAI_KEY", "sk-no-auth"),  # 未启用鉴权时填任意非空字符串
+)
+
+with client.audio.speech.with_streaming_response.create(
+    model="mimo-v2.5-tts",
+    input="你好，这是一段语音合成测试。",
+    voice="mimo_default",
+    response_format="wav",
+    instructions="用温柔、平静的语气朗读",  # 可选：控制语气 / 情绪 / 语速
+) as response:
+    response.stream_to_file("speech.wav")
+```
+
+参数说明：
+
+| 字段 | 说明 | 默认值 |
+| --- | --- | --- |
+| `input` | 要合成为语音的目标文本（必填） | — |
+| `voice` | 音色；OpenAI 音色名（alloy 等）会映射为 `mimo_default`，也可直接填 MiMo 精品音色名 | `mimo_default` |
+| `response_format` | 音频格式，支持 `wav` / `mp3` / `flac` / `aac` / `opus` / `pcm` | `wav` |
+| `instructions` | 可选，自然语言风格指令（语气 / 语速 / 情绪），内容不会被读出来 | — |
+
+### 方式二：`/v1/chat/completions`（原生，功能完整）
+
+MiMo TTS 复用 chat 接口，但规则与普通对话**相反**：**要合成的文本必须放在 `assistant` 角色**；`user` 角色用于传可选的风格指令（不会被读出来）。
+
+```bash
+curl -X POST http://localhost:8000/v1/chat/completions \
+  -H "Authorization: Bearer $MIMO_RELAY_OPENAI_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "mimo-v2.5-tts",
+    "messages": [
+      { "role": "user",      "content": "用兴奋、轻快的语气" },
+      { "role": "assistant", "content": "（开心）老板，我考过了，还是优秀！" }
+    ],
+    "audio": { "format": "wav", "voice": "mimo_default" }
+  }'
+```
+
+- 返回为标准 Chat Completion 结构，音频数据（base64 编码）位于 `choices[0].message.audio.data`。
+- `assistant` 文本中可用 `（风格）` 与 `[音频标签]` 做精细控制，例如 `（唱歌）`、`（四川话）`、`[大笑]` 等。
+- 同系列的音色设计、音色复刻模型也走该端点，但参数不同，详见下文。
+
+### 音色设计：`mimo-v2.5-tts-voicedesign`
+
+无需音频样本，在 `user` 角色里用自然语言**描述想要的音色**（必填），`assistant` 角色放目标文本。该模型**不支持 `voice` 字段**。
+
+```bash
+curl -X POST http://localhost:8000/v1/chat/completions \
+  -H "Authorization: Bearer $MIMO_RELAY_OPENAI_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "mimo-v2.5-tts-voicedesign",
+    "messages": [
+      { "role": "user",      "content": "一个温柔的年轻女性音色，语速偏慢" },
+      { "role": "assistant", "content": "欢迎回来，今天也辛苦啦。" }
+    ],
+    "audio": { "format": "wav", "optimize_text_preview": true }
+  }'
+```
+
+> `optimize_text_preview` 设为 `true` 时会对播报文本智能润色，此时可省略 `assistant` 消息。
+
+### 音色复刻：`mimo-v2.5-tts-voiceclone`
+
+传入一段参考音频即可复刻其音色。参考音频放在 **`audio.voice`** 字段，格式为 `data:{MIME_TYPE};base64,{BASE64}`：
+
+- 仅支持 `mp3`、`wav`，MIME 取值为 `audio/mpeg`（或 `audio/mp3`）、`audio/wav`
+- Base64 字符串大小 ≤ 10 MB（建议用清晰、单人、少背景噪声的 10~30 秒人声片段）
+- `user` 角色可选（附加风格指令），`assistant` 角色放目标文本
+
+```python
+import base64
+import os
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:8000/v1",
+    api_key=os.getenv("MIMO_RELAY_OPENAI_KEY", "sk-no-auth"),
+)
+
+with open("voice_sample.mp3", "rb") as f:
+    voice_b64 = base64.b64encode(f.read()).decode()
+
+completion = client.chat.completions.create(
+    model="mimo-v2.5-tts-voiceclone",
+    messages=[
+        {"role": "user", "content": ""},  # 可选：风格指令
+        {"role": "assistant", "content": "这是用复刻音色合成的一句话。"},
+    ],
+    audio={"format": "wav", "voice": f"data:audio/mpeg;base64,{voice_b64}"},
+)
+
+audio_bytes = base64.b64decode(completion.choices[0].message.audio.data)
+with open("cloned.wav", "wb") as f:
+    f.write(audio_bytes)
+```
 
 ## 免责声明
 

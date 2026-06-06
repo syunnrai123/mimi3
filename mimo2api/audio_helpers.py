@@ -46,14 +46,15 @@ def map_openai_tts_voice(voice: str | None) -> str:
 
 def map_openai_tts_model(model: str | None) -> str:
     if not model:
-        return "mimo-v2-tts"
+        return "mimo-v2.5-tts"
     model_map = {
-        "tts-1": "mimo-v2-tts",
-        "tts-1-hd": "mimo-v2-tts",
-        "gpt-4o-mini-tts": "mimo-v2-tts",
-        "mimo-v2-tts": "mimo-v2-tts",
+        "tts-1": "mimo-v2.5-tts",
+        "tts-1-hd": "mimo-v2.5-tts",
+        "gpt-4o-mini-tts": "mimo-v2.5-tts",
+        "mimo-v2-tts": "mimo-v2.5-tts",
+        "mimo-v2.5-tts": "mimo-v2.5-tts",
     }
-    return model_map.get(model, "mimo-v2-tts")
+    return model_map.get(model, "mimo-v2.5-tts")
 
 
 def audio_media_type(audio_format: str) -> str:
